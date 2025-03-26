@@ -73,12 +73,10 @@ You can play the game live here:
 
 **[Play Pazlu Snake!](https://github.com/Lichiel/Pazlu-snake/)**
 
-*(Replace `your-username` and `your-repo-name` with your actual GitHub details after deploying to GitHub Pages)*
-
 ## How to Run Locally
 
 1.  **Clone or Download:**
-    *   Clone the repository: `git clone https://github.com/your-username/your-repo-name.git`
+    *   Clone the repository: `git clone https://github.com/Lichiel/Pazlu-snake.git`
     *   Or download the ZIP file and extract it.
 2.  **Navigate:** Open the project folder in your file explorer or terminal.
 3.  **Open `index.html`:** Double-click the `index.html` file to open it in your default web browser.
@@ -125,7 +123,7 @@ Click "Apply & Restart" to save the settings (stored in `localStorage`) and rest
 
 ## Contributing
 
-Contributions, issues, and feature requests are welcome! Feel free to check [issues page](https://github.com/your-username/your-repo-name/issues).
+Contributions, issues, and feature requests are welcome! Feel free to check [issues page](https://github.com/Lichiel/Pazlu-snake/issues).
 
 1.  Fork the Project
 2.  Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
