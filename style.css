@@ -1,0 +1,145 @@
+/* style.css */
+
+/* Define Color Palette and Base Styles */
+:root {
+    --bg-gradient-start: #7f7fd5;
+    --bg-gradient-mid: #86a8e7;
+    --bg-gradient-end: #91eae4;
+    --container-bg: rgba(255, 255, 255, 0.97);
+    --text-dark: #333;
+    --text-light: #fff;
+    --shadow-color: rgba(0, 0, 0, 0.15);
+    --border-color: #ccc;
+    --canvas-border: #444;
+    --score-color: #555;
+
+    /* Game Colors (Defaults, overridden by JS config) */
+    --snake-color: #FF69B4;
+    --snake-border: #d147a3;
+    --snake-glow: rgba(255, 105, 180, 0.5);
+    --food-color: #90EE90;
+    --food-border: #7CCD7C;
+    --food-glow: rgba(173, 255, 47, 0.6);
+    --game-bg-color: #005000;
+    --obstacle-color: #555555;
+    --obstacle-border: #333333;
+    --powerup-color: #ffd700; /* Gold */
+    --powerup-border: #e6c200;
+    --powerup-glow: rgba(255, 215, 0, 0.7);
+
+    /* Button Colors */
+    --btn-success: #28a745;
+    --btn-success-hover: #218838;
+    --btn-warning: #ffc107;
+    --btn-warning-hover: #e0a800;
+    --btn-info: #17a2b8;
+    --btn-info-hover: #138496;
+    --btn-primary: #007bff;
+    --btn-primary-hover: #0056b3;
+
+    /* Toggle Switch Colors */
+     --toggle-bg-off: #ccc;
+     --toggle-bg-on: var(--btn-success);
+     --toggle-knob: white;
+}
+
+/* General Reset & Body Styling */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body {
+    display: flex; justify-content: center; align-items: center; min-height: 100vh;
+    background: linear-gradient(135deg, var(--bg-gradient-start), var(--bg-gradient-mid), var(--bg-gradient-end));
+    font-family: 'Poppins', sans-serif; color: var(--text-dark); padding: 10px;
+    overflow-x: hidden; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Game Wrapper & Container */
+.game-wrapper { width: 100%; max-width: 600px; }
+.game-container { background-color: var(--container-bg); padding: 20px; border-radius: 20px; box-shadow: 0 15px 35px var(--shadow-color); display: flex; flex-direction: column; align-items: center; }
+
+/* Title Area */
+#titleContainer { padding: 8px 15px; margin-bottom: 20px; border-radius: 10px; background-color: hsl(0, 80%, 60%); transition: background-color 0.1s linear; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+h1 { font-family: 'Press Start 2P', cursive; font-size: 1.4em; color: var(--text-light); text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.4); }
+
+/* Score Display */
+.score-display { display: flex; justify-content: space-between; width: 100%; max-width: 450px; margin-bottom: 15px; font-size: 1.1em; font-weight: 600; color: var(--score-color); padding: 5px 10px; background-color: rgba(0,0,0,0.03); border-radius: 8px; position: relative; }
+#scoreMultiplier { font-size: 0.8em; font-weight: normal; margin-left: 5px; padding: 2px 5px; border-radius: 4px; transition: background-color 0.3s ease, color 0.3s ease, transform 0.3s ease; }
+.multiplier-inactive { background-color: #eee; color: #888; }
+.multiplier-active { background-color: var(--powerup-color); color: #333; font-weight: bold; animation: pulseMultiplier 1s infinite ease-in-out; }
+@keyframes pulseMultiplier { 0%, 100% { transform: scale(1); box-shadow: 0 0 3px var(--powerup-color); } 50% { transform: scale(1.15); box-shadow: 0 0 8px var(--powerup-color); } }
+
+/* Score Pop Animation */
+@keyframes scorePop { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.4); opacity: 0.9; color: var(--btn-success); } 100% { transform: scale(1); opacity: 1; } }
+.score-pop-animation { display: inline-block; animation: scorePop 0.4s ease-out; }
+
+/* Canvas */
+#gameCanvas { border: 5px solid var(--canvas-border); display: block; background-color: var(--game-bg-color); box-shadow: 0 0 15px rgba(0,0,0,0.4) inset; border-radius: 5px; max-width: 100%; height: auto; image-rendering: pixelated; overflow: hidden; touch-action: none; }
+
+/* Game Over Message Styling */
+.game-over-container { display: none; margin-top: 20px; padding: 15px 20px; background-color: rgba(40, 40, 40, 0.9); border-radius: 10px; color: #fff; text-align: center; box-shadow: 0 5px 15px rgba(0,0,0,0.4); opacity: 0; transform: translateY(15px) scale(0.98); /* Animation applied via JS */ }
+@keyframes fadeInGameOver { to { opacity: 1; transform: translateY(0) scale(1); } }
+.game-over-title { font-family: 'Press Start 2P', cursive; font-size: 1.8em; color: #ff5252; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.6); }
+.final-score { font-size: 1.3em; margin-bottom: 15px; color: #f0f0f0; }
+#finalScoreValue { font-weight: bold; color: var(--btn-warning); text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
+.restart-prompt { font-size: 0.9em; color: #bbb; }
+
+/* Controls Area */
+.controls { margin-top: 20px; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 12px; width: 100%; max-width: 480px; }
+
+/* General Button Style */
+.btn { font-family: 'Poppins', sans-serif; font-size: 0.95em; font-weight: 600; padding: 8px 16px; border: none; border-radius: 8px; color: var(--text-light); cursor: pointer; transition: background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease, opacity 0.2s ease; box-shadow: 0 3px 6px var(--shadow-color); text-transform: uppercase; letter-spacing: 0.5px; }
+.btn:disabled { cursor: not-allowed; opacity: 0.6; box-shadow: none; transform: none; }
+.btn:not(:disabled):hover { transform: translateY(-2px); box-shadow: 0 5px 10px var(--shadow-color); }
+.btn:not(:disabled):active { transform: translateY(0px); box-shadow: 0 1px 3px var(--shadow-color); }
+/* Specific Button Colors */
+.btn-success { background-color: var(--btn-success); } .btn-success:not(:disabled):hover { background-color: var(--btn-success-hover); }
+.btn-warning { background-color: var(--btn-warning); } .btn-warning:not(:disabled):hover { background-color: var(--btn-warning-hover); }
+.btn-info { background-color: var(--btn-info); } .btn-info:not(:disabled):hover { background-color: var(--btn-info-hover); }
+.btn-primary { background-color: var(--btn-primary); } .btn-primary:not(:disabled):hover { background-color: var(--btn-primary-hover); }
+
+/* Volume Controls */
+.volume-control { display: flex; align-items: center; gap: 6px; font-size: 0.9em; color: var(--score-color); }
+.volume-control label { font-weight: 600; }
+
+/* Slider Styles */
+input[type="range"] { cursor: pointer; width: 80px; height: 6px; background: #eee; border-radius: 3px; outline: none; -webkit-appearance: none; appearance: none; box-shadow: inset 0 1px 2px rgba(0,0,0,0.1); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; background: var(--bg-gradient-mid); border-radius: 50%; cursor: pointer; border: 2px solid var(--text-light); box-shadow: 0 1px 3px rgba(0,0,0,0.3); transition: background-color 0.2s ease; }
+input[type=range]::-moz-range-thumb { width: 14px; height: 14px; background: var(--bg-gradient-mid); border-radius: 50%; cursor: pointer; border: 2px solid var(--text-light); box-shadow: 0 1px 3px rgba(0,0,0,0.3); transition: background-color 0.2s ease; }
+input[type=range]:hover::-webkit-slider-thumb { background: var(--bg-gradient-start); }
+input[type=range]:hover::-moz-range-thumb { background: var(--bg-gradient-start); }
+
+/* Configuration Modal Styles */
+.modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px); opacity: 0; transform: scale(0.95); transition: opacity 0.3s ease, transform 0.3s ease; pointer-events: none; }
+.modal.open { opacity: 1; transform: scale(1); pointer-events: auto; }
+.modal-content { background-color: #fefefe; margin: 10% auto; padding: 20px 25px; border: 1px solid var(--border-color); width: 90%; max-width: 480px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2); position: relative; }
+.close-button { color: #aaa; position: absolute; top: 8px; right: 12px; font-size: 26px; font-weight: bold; line-height: 1; cursor: pointer; transition: color 0.2s ease; }
+.close-button:hover, .close-button:focus { color: black; }
+.modal h2 { margin-bottom: 20px; text-align: center; color: var(--text-dark); font-weight: 600; font-size: 1.4em;}
+.config-options { display: grid; gap: 15px; margin-bottom: 25px; }
+.config-group { display: flex; align-items: center; justify-content: space-between; min-height: 36px; }
+.config-group label { font-weight: 600; margin-right: 10px; color: var(--score-color); flex-shrink: 0; font-size: 0.95em; }
+.config-group input[type="number"] { width: 65px; }
+.config-group input[type="number"], .config-group input[type="color"] { padding: 5px 8px; border: 1px solid var(--border-color); border-radius: 5px; font-size: 0.9em; }
+.config-group input[type="color"] { height: 36px; width: 55px; padding: 2px; cursor: pointer; border: none; background-color: transparent; }
+.config-group input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+.config-group input[type="color"]::-webkit-color-swatch { border: 1px solid #ccc; border-radius: 4px; }
+.config-group input[type="color"]::-moz-color-swatch { border: 1px solid #ccc; border-radius: 4px; }
+
+/* Styles for the Toggle Switch */
+.toggle-group { /* Adjust spacing if needed */ }
+.switch { position: relative; display: inline-block; width: 50px; height: 26px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--toggle-bg-off); transition: .4s; }
+.slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 4px; bottom: 4px; background-color: var(--toggle-knob); transition: .4s; }
+input:checked + .slider { background-color: var(--toggle-bg-on); }
+input:focus + .slider { box-shadow: 0 0 1px var(--toggle-bg-on); }
+input:checked + .slider:before { transform: translateX(24px); }
+.slider.round { border-radius: 26px; }
+.slider.round:before { border-radius: 50%; }
+#configObstacleCount:disabled { opacity: 0.5; cursor: not-allowed; background-color: #eee; }
+
+#applyConfigButton { display: block; width: 60%; margin: 10px auto 0 auto; }
+
+/* Debug Info Area */
+#debugInfo { width: 100%; max-width: 450px; margin-top: 15px; font-size: 0.8em; color: #777; text-align: center; min-height: 1.2em; }
