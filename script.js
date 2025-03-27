@@ -16,6 +16,7 @@ const volumeSlider = document.getElementById('volumeSlider');
 const musicVolumeSlider = document.getElementById('musicVolumeSlider');
 const gameContainer = document.querySelector('.game-container');
 const debugInfoElement = document.getElementById('debugInfo');
+const stagePopupElement = document.getElementById('stagePopup'); // Added for stage pop-up
 
 // Config Modal Elements
 const configButton = document.getElementById('configButton');
@@ -42,23 +43,42 @@ const allSounds = [walkSound, eatSound, oopsSound, powerupSound];
 // --- Fixed Global Constants ---
 const EYE_COLOR = '#000000';
 const DEAD_EYE_COLOR = '#333333';
+const NOSTRIL_COLOR = 'rgba(0, 0, 0, 0.4)'; // Define nostril color globally
 const MIN_SWIPE_DISTANCE = 30;
+
+// Speed Mapping Constants
+const MAX_SPEED_INPUT = 300; // Corresponds to fastest game (shortest delay)
+const MIN_SPEED_INPUT = 50;  // Corresponds to slowest game (longest delay)
+const MAX_GAME_DELAY = 350;  // Longest delay (ms) for MIN_SPEED_INPUT
+// MIN_GAME_DELAY is defined in config as MIN_GAME_SPEED (default 60)
 
 // --- Game Configuration (Defaults) ---
 let config = {
     GRID_SIZE: 30, INITIAL_GAME_SPEED: 180,
-    SNAKE_COLOR: '#FF69B4', SNAKE_BORDER_COLOR: '#d147a3', SNAKE_GLOW_COLOR: 'rgba(255, 105, 180, 0.5)',
+    // REMOVED old snake appearance config: SNAKE_COLOR, SNAKE_BORDER_COLOR, SNAKE_GLOW_COLOR, EYE_APPEAR_LENGTH, TEEN_LENGTH, ADULT_LENGTH, TEEN_PATTERN_COLOR, TEEN_BORDER_COLOR, NOSTRIL_COLOR
     FOOD_COLOR: '#90EE90', FOOD_BORDER_COLOR: '#7CCD7C', FOOD_GLOW_COLOR: 'rgba(173, 255, 47, 0.6)',
     BACKGROUND_COLOR: '#005000', OBSTACLE_COLOR: '#555555', OBSTACLE_BORDER_COLOR: '#333333',
     POWERUP_COLOR: '#ffd700', POWERUP_BORDER_COLOR: '#e6c200', POWERUP_GLOW_COLOR: 'rgba(255, 215, 0, 0.7)',
     WALL_HIT_PENALTY: 5, MIN_GAME_SPEED: 60, SPEED_INCREMENT: 3, MIN_SNAKE_LENGTH: 1,
-    EYE_APPEAR_LENGTH: 5, TEEN_LENGTH: 10, ADULT_LENGTH: 15,
-    TEEN_PATTERN_COLOR: 'rgba(0, 0, 0, 0.15)', TEEN_BORDER_COLOR: '#b82e8a', NOSTRIL_COLOR: 'rgba(0, 0, 0, 0.4)',
     FOOD_PULSE_SPEED: 300, MIN_SNAKE_OPACITY: 0.3, GAME_OVER_HEAD_SCALE: 2.0,
     BACKGROUND_PARTICLE_COUNT: 40, EAT_PARTICLE_COUNT: 20,
-    SHAKE_BASE_INTENSITY: 3, SHAKE_DURATION_FRAMES: 6,
+    SHAKE_BASE_INTENSITY: 3, SHAKE_DURATION_FRAMES: 6, // For wall hit shake
     OBSTACLE_COUNT: 5, POWERUP_SPAWN_CHANCE: 0.05, POWERUP_DURATION_FRAMES: 300,
     ENABLE_OBSTACLES: true,
+
+    // --- Snake Stages ---
+    stages: [
+        { minLength: 0,  name: "Hatchling", baseColor: '#FFC0CB', borderColor: '#FF99AA', glowColor: 'rgba(255, 192, 203, 0.4)', patternColor: null, hasEyes: false, hasNostrils: false }, // Light Pink
+        { minLength: 5,  name: "Juvenile",  baseColor: '#FF69B4', borderColor: '#d147a3', glowColor: 'rgba(255, 105, 180, 0.5)', patternColor: null, hasEyes: true,  hasNostrils: false }, // Original Pink (Eyes added)
+        { minLength: 10, name: "Python",    baseColor: '#DA70D6', borderColor: '#b82e8a', glowColor: 'rgba(218, 112, 214, 0.5)', patternColor: 'rgba(0, 0, 0, 0.1)', hasEyes: true,  hasNostrils: false }, // Orchid (Pattern added)
+        { minLength: 15, name: "Anaconda",  baseColor: '#9370DB', borderColor: '#7a5abc', glowColor: 'rgba(147, 112, 219, 0.6)', patternColor: 'rgba(0, 0, 0, 0.15)', hasEyes: true,  hasNostrils: true }, // Medium Purple (Nostrils added)
+        { minLength: 20, name: "Constrictor", baseColor: '#483D8B', borderColor: '#3a316e', glowColor: 'rgba(72, 61, 139, 0.6)', patternColor: 'rgba(255, 255, 255, 0.1)', hasEyes: true,  hasNostrils: true }, // Dark Slate Blue
+        { minLength: 30, name: "Viper",     baseColor: '#2E8B57', borderColor: '#256e45', glowColor: 'rgba(46, 139, 87, 0.6)', patternColor: 'rgba(0, 0, 0, 0.2)', hasEyes: true,  hasNostrils: true }, // Sea Green
+        { minLength: 40, name: "Cobra",     baseColor: '#CD853F', borderColor: '#a86d34', glowColor: 'rgba(205, 133, 63, 0.6)', patternColor: 'rgba(0, 0, 0, 0.25)', hasEyes: true,  hasNostrils: true }, // Peru (Brownish)
+        { minLength: 50, name: "Titanoboa", baseColor: '#8B0000', borderColor: '#6e0000', glowColor: 'rgba(139, 0, 0, 0.7)', patternColor: 'rgba(255, 215, 0, 0.15)', hasEyes: true,  hasNostrils: true }, // Dark Red + Gold pattern
+        { minLength: 75, name: "Super Snake", baseColor: '#00BFFF', borderColor: '#009acd', glowColor: 'rgba(0, 191, 255, 0.8)', patternColor: 'rgba(255, 255, 255, 0.2)', hasEyes: true,  hasNostrils: true }, // Deep Sky Blue
+        { minLength: 100, name: "LEGENDARY", baseColor: '#FFD700', borderColor: '#b39700', glowColor: 'rgba(255, 255, 255, 0.9)', patternColor: 'rgba(255, 255, 255, 0.3)', hasEyes: true,  hasNostrils: true }, // Gold + White glow/pattern
+    ]
 };
 
 // --- Game Constants (Derived) ---
@@ -73,6 +93,7 @@ let shakeDuration = 0; let currentShakeIntensity = 0;
 let obstacles = []; let powerUp = null;
 let isMultiplierActive = false; let multiplierTimer = 0;
 let touchStartX = 0; let touchStartY = 0; let touchEndX = 0; let touchEndY = 0; let isSwiping = false;
+let currentStageIndex = 0; // Added to track current snake stage
 
 // --- Centralized Error Handling ---
 function handleError(error, context = "General") {
@@ -98,13 +119,16 @@ function loadConfig() {
     try {
         const savedConfig = localStorage.getItem('snakeConfigV4');
         if (savedConfig) {
+            console.log("Saved config found in localStorage. Merging...");
             const parsedConfig = JSON.parse(savedConfig);
+
             if (typeof parsedConfig.ENABLE_OBSTACLES === 'boolean') { config.ENABLE_OBSTACLES = parsedConfig.ENABLE_OBSTACLES; }
             for (const key in config) {
                  if (parsedConfig.hasOwnProperty(key) && typeof parsedConfig[key] === typeof config[key] && typeof config[key] !== 'boolean') { config[key] = parsedConfig[key]; }
             }
-            console.log("Saved config found and merged.");
+            console.log("Saved config merged.");
         } else { console.log("No saved config found, using defaults."); }
+
         console.log("Current config:", JSON.stringify(config));
         applyColorConfigToCSS();
     } catch (e) { handleError(e, "loadConfig"); localStorage.removeItem('snakeConfigV4'); }
@@ -145,6 +169,7 @@ function initializeGame() {
         dx = 1; dy = 0; score = 0; gameSpeed = config.INITIAL_GAME_SPEED;
         changingDirection = false; isGameOver = false; isPaused = true; gameStarted = false;
         shakeDuration = 0; eatParticles = []; powerUp = null; isMultiplierActive = false; multiplierTimer = 0;
+        currentStageIndex = 0; // Reset stage index
         updateMultiplierDisplay();
 
         highScore = parseInt(localStorage.getItem('snakeHighScore') || '0');
@@ -222,50 +247,157 @@ function updateMultiplierDisplay() { if (!scoreMultiplierElement) return; try { 
 // --- Drawing Functions ---
 function clearCanvas() { if (!ctx) return; try { const bgColor = config.BACKGROUND_COLOR || '#000000'; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = bgColor; ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT); } catch (e) { handleError(e, "clearCanvas"); } }
 function drawSnakePart(segment, index, totalLength) {
-    // Restored original logic with added logging and safety
     if (!ctx || !segment || typeof segment.x !== 'number' || typeof segment.y !== 'number') { console.error(`drawSnakePart ABORTED index ${index}: Invalid ctx or segment:`, segment); return; }
     try {
-        const isHead = index === 0; let currentGridSize = config.GRID_SIZE; let drawX = segment.x * config.GRID_SIZE; let drawY = segment.y * config.GRID_SIZE;
-        let segmentOpacity = 1.0; let segmentFillColor = config.SNAKE_COLOR; let segmentBorderColor = config.SNAKE_BORDER_COLOR;
+        const currentStage = config.stages[currentStageIndex]; // Get current stage properties
+        if (!currentStage) { throw new Error(`Invalid currentStageIndex: ${currentStageIndex}`); }
 
-        if (isGameOver && isHead) { currentGridSize = config.GRID_SIZE * config.GAME_OVER_HEAD_SCALE; const offset = (config.GRID_SIZE - currentGridSize) / 2; drawX = (segment.x * config.GRID_SIZE) + offset; drawY = (segment.y * config.GRID_SIZE) + offset; segmentOpacity = 1.0; }
-        else { if (totalLength > 1) segmentOpacity = config.MIN_SNAKE_OPACITY + (1.0 - config.MIN_SNAKE_OPACITY) * ((totalLength - 1 - index) / (totalLength - 1)); if (totalLength >= config.TEEN_LENGTH) segmentBorderColor = config.TEEN_BORDER_COLOR; }
+        const isHead = index === 0;
+        let currentGridSize = config.GRID_SIZE;
+        let drawX = segment.x * config.GRID_SIZE;
+        let drawY = segment.y * config.GRID_SIZE;
+        let segmentOpacity = 1.0;
 
-        if (!(isGameOver && isHead)) { ctx.shadowBlur = config.GRID_SIZE / 2.5; ctx.shadowColor = config.SNAKE_GLOW_COLOR; }
+        // Use stage colors
+        let segmentFillColor = currentStage.baseColor;
+        let segmentBorderColor = currentStage.borderColor;
+        let segmentGlowColor = currentStage.glowColor;
 
-        // --- LOGGING BEFORE DRAW ---
-        const logColor = segmentFillColor;
-        console.log(`>>> Drawing segment index ${index} at canvas coords (${drawX.toFixed(1)}, ${drawY.toFixed(1)}) size ${currentGridSize.toFixed(1)} color ${logColor} opacity ${segmentOpacity.toFixed(2)}`);
-        if (drawX < -currentGridSize || drawX > CANVAS_WIDTH || drawY < -currentGridSize || drawY > CANVAS_HEIGHT) { console.warn(`   ^ Segment ${index} appears off-canvas!`); }
-        // --- END LOGGING ---
+        // Handle game over head scaling and appearance
+        if (isGameOver && isHead) {
+            currentGridSize = config.GRID_SIZE * config.GAME_OVER_HEAD_SCALE;
+            const offset = (config.GRID_SIZE - currentGridSize) / 2;
+            drawX = (segment.x * config.GRID_SIZE) + offset;
+            drawY = (segment.y * config.GRID_SIZE) + offset;
+            segmentOpacity = 1.0; // Keep head fully opaque on game over
+            segmentGlowColor = 'transparent'; // No glow on game over
+        } else {
+            // Apply opacity gradient to tail
+            if (totalLength > 1) {
+                segmentOpacity = config.MIN_SNAKE_OPACITY + (1.0 - config.MIN_SNAKE_OPACITY) * ((totalLength - 1 - index) / (totalLength - 1));
+            }
+        }
 
-        ctx.globalAlpha = segmentOpacity; ctx.fillStyle = segmentFillColor; ctx.strokeStyle = segmentBorderColor;
+        // Apply glow effect if not game over head
+        if (!(isGameOver && isHead)) {
+            ctx.shadowBlur = config.GRID_SIZE / 2.5;
+            ctx.shadowColor = segmentGlowColor;
+        }
+
+        // --- REMOVED DEBUG LOGGING ---
+
+        // Draw segment body
+        ctx.globalAlpha = segmentOpacity;
+        ctx.fillStyle = segmentFillColor;
+        ctx.strokeStyle = segmentBorderColor;
         ctx.fillRect(drawX, drawY, currentGridSize, currentGridSize);
 
-        if (!isGameOver && totalLength >= config.TEEN_LENGTH && !isHead) { ctx.fillStyle = config.TEEN_PATTERN_COLOR; const patternSize = currentGridSize / 6; ctx.fillRect(drawX + patternSize, drawY + patternSize, patternSize, patternSize); ctx.fillRect(drawX + currentGridSize - patternSize*2, drawY + currentGridSize - patternSize*2, patternSize, patternSize); }
-        ctx.strokeRect(drawX, drawY, currentGridSize, currentGridSize);
-        ctx.globalAlpha = 1.0; ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
+        // Draw pattern on body segments if applicable for the stage
+        if (!isGameOver && !isHead && currentStage.patternColor) {
+            ctx.fillStyle = currentStage.patternColor;
+            const patternSize = currentGridSize / 6; // Example pattern size
+            // Simple pattern - adjust as desired
+            ctx.fillRect(drawX + patternSize, drawY + patternSize, patternSize, patternSize);
+            ctx.fillRect(drawX + currentGridSize - patternSize * 2, drawY + currentGridSize - patternSize * 2, patternSize, patternSize);
+        }
 
-        if (isHead && totalLength >= 1) { // Draw Head Features
-            if (totalLength >= config.EYE_APPEAR_LENGTH) { // Draw Eyes
-                 try {
-                     const eyeSizeRatio = 0.2, eyeOffsetRatio = 0.25; const eyeSize = currentGridSize * eyeSizeRatio; const offset = currentGridSize * eyeOffsetRatio;
-                     if (isGameOver) { /* Dead Eyes */ const centerX = drawX + currentGridSize / 2, centerY = drawY + currentGridSize / 2; const crossSize = currentGridSize * 0.4; ctx.lineWidth = Math.max(1, currentGridSize * 0.08); ctx.strokeStyle = DEAD_EYE_COLOR; ctx.beginPath(); ctx.moveTo(centerX - crossSize / 2, centerY - crossSize / 2); ctx.lineTo(centerX + crossSize / 2, centerY + crossSize / 2); ctx.moveTo(centerX + crossSize / 2, centerY - crossSize / 2); ctx.lineTo(centerX - crossSize / 2, centerY + crossSize / 2); ctx.stroke(); ctx.lineWidth = 1; }
-                     else { /* Normal Eyes */ ctx.fillStyle = EYE_COLOR; let eye1X, eye1Y, eye2X, eye2Y; if (typeof dx !== 'number' || typeof dy !== 'number') throw new Error("Invalid dx/dy for eyes"); if (dx !== 0) { eye1X = drawX + (dx > 0 ? currentGridSize - eyeSize - offset : offset); eye2X = eye1X; eye1Y = drawY + offset; eye2Y = drawY + currentGridSize - offset - eyeSize; } else { eye1Y = drawY + (dy > 0 ? currentGridSize - eyeSize - offset : offset); eye2Y = eye1Y; eye1X = drawX + offset; eye2X = drawX + currentGridSize - offset - eyeSize; } if (typeof eye1X !== 'number' || typeof eye1Y !== 'number' || typeof eye2X !== 'number' || typeof eye2Y !== 'number' || typeof eyeSize !== 'number' || eyeSize <= 0) throw new Error("Invalid eye coords/size calculated"); ctx.fillRect(eye1X, eye1Y, eyeSize, eyeSize); ctx.fillRect(eye2X, eye2Y, eyeSize, eyeSize); }
-                 } catch (eyeError) { handleError(eyeError, "drawSnakePart - Eyes"); }
+        // Draw segment border
+        ctx.strokeRect(drawX, drawY, currentGridSize, currentGridSize);
+
+        // Reset alpha and shadow
+        ctx.globalAlpha = 1.0;
+        ctx.shadowBlur = 0;
+        ctx.shadowColor = 'transparent';
+
+        // Draw Head Features based on stage flags
+        if (isHead && totalLength >= 1) {
+            // Eyes
+            if (currentStage.hasEyes) {
+                try {
+                    const eyeSizeRatio = 0.2, eyeOffsetRatio = 0.25;
+                    const eyeSize = currentGridSize * eyeSizeRatio;
+                    const offset = currentGridSize * eyeOffsetRatio;
+                    if (isGameOver) { // Dead Eyes
+                        const centerX = drawX + currentGridSize / 2, centerY = drawY + currentGridSize / 2;
+                        const crossSize = currentGridSize * 0.4;
+                        ctx.lineWidth = Math.max(1, currentGridSize * 0.08);
+                        ctx.strokeStyle = DEAD_EYE_COLOR;
+                        ctx.beginPath();
+                        ctx.moveTo(centerX - crossSize / 2, centerY - crossSize / 2); ctx.lineTo(centerX + crossSize / 2, centerY + crossSize / 2);
+                        ctx.moveTo(centerX + crossSize / 2, centerY - crossSize / 2); ctx.lineTo(centerX - crossSize / 2, centerY + crossSize / 2);
+                        ctx.stroke();
+                        ctx.lineWidth = 1;
+                    } else { // Normal Eyes
+                        ctx.fillStyle = EYE_COLOR;
+                        let eye1X, eye1Y, eye2X, eye2Y;
+                        if (typeof dx !== 'number' || typeof dy !== 'number') throw new Error("Invalid dx/dy for eyes");
+                        if (dx !== 0) { eye1X = drawX + (dx > 0 ? currentGridSize - eyeSize - offset : offset); eye2X = eye1X; eye1Y = drawY + offset; eye2Y = drawY + currentGridSize - offset - eyeSize; }
+                        else { eye1Y = drawY + (dy > 0 ? currentGridSize - eyeSize - offset : offset); eye2Y = eye1Y; eye1X = drawX + offset; eye2X = drawX + currentGridSize - offset - eyeSize; }
+                        if (typeof eye1X !== 'number' || typeof eye1Y !== 'number' || typeof eye2X !== 'number' || typeof eye2Y !== 'number' || typeof eyeSize !== 'number' || eyeSize <= 0) throw new Error("Invalid eye coords/size calculated");
+                        ctx.fillRect(eye1X, eye1Y, eyeSize, eyeSize); ctx.fillRect(eye2X, eye2Y, eyeSize, eyeSize);
+                    }
+                } catch (eyeError) { handleError(eyeError, "drawSnakePart - Eyes"); }
             }
-            if (!isGameOver && totalLength >= config.ADULT_LENGTH) { // Draw Nostrils
-                 try { ctx.fillStyle = config.NOSTRIL_COLOR; const nostrilSize = currentGridSize / 10; const nostrilOffset = currentGridSize / 5; let n1X, n1Y, n2X, n2Y; /* Position logic... */ if (dx === 1) { n1X = drawX + currentGridSize - nostrilOffset - nostrilSize; n2X = n1X; n1Y = drawY + nostrilOffset; n2Y = drawY + currentGridSize - nostrilOffset - nostrilSize; } else if (dx === -1) { n1X = drawX + nostrilOffset; n2X = n1X; n1Y = drawY + nostrilOffset; n2Y = drawY + currentGridSize - nostrilOffset - nostrilSize; } else if (dy === 1) { n1Y = drawY + currentGridSize - nostrilOffset - nostrilSize; n2Y = n1Y; n1X = drawX + nostrilOffset; n2X = drawX + currentGridSize - nostrilOffset - nostrilSize; } else { n1Y = drawY + nostrilOffset; n2Y = n1Y; n1X = drawX + nostrilOffset; n2X = drawX + currentGridSize - nostrilOffset - nostrilSize; } if (typeof n1X === 'number' && typeof n1Y === 'number' && typeof n2X === 'number' && typeof n2Y === 'number' && typeof nostrilSize === 'number' && nostrilSize > 0){ ctx.fillRect(n1X, n1Y, nostrilSize, nostrilSize); ctx.fillRect(n2X, n2Y, nostrilSize, nostrilSize); } else { console.warn("Invalid nostril coords/size."); } }
-                 catch (nostrilError) { handleError(nostrilError, "drawSnakePart - Nostrils"); }
+            // Nostrils
+            if (!isGameOver && currentStage.hasNostrils) {
+                try {
+                    ctx.fillStyle = NOSTRIL_COLOR; // Keep using global NOSTRIL_COLOR or define per stage? Using global for now.
+                    const nostrilSize = currentGridSize / 10;
+                    const nostrilOffset = currentGridSize / 5;
+                    let n1X, n1Y, n2X, n2Y;
+                    // Position logic... (same as before)
+                    if (dx === 1) { n1X = drawX + currentGridSize - nostrilOffset - nostrilSize; n2X = n1X; n1Y = drawY + nostrilOffset; n2Y = drawY + currentGridSize - nostrilOffset - nostrilSize; }
+                    else if (dx === -1) { n1X = drawX + nostrilOffset; n2X = n1X; n1Y = drawY + nostrilOffset; n2Y = drawY + currentGridSize - nostrilOffset - nostrilSize; }
+                    else if (dy === 1) { n1Y = drawY + currentGridSize - nostrilOffset - nostrilSize; n2Y = n1Y; n1X = drawX + nostrilOffset; n2X = drawX + currentGridSize - nostrilOffset - nostrilSize; }
+                    else { n1Y = drawY + nostrilOffset; n2Y = n1Y; n1X = drawX + nostrilOffset; n2X = drawX + currentGridSize - nostrilOffset - nostrilSize; }
+                    if (typeof n1X === 'number' && typeof n1Y === 'number' && typeof n2X === 'number' && typeof n2Y === 'number' && typeof nostrilSize === 'number' && nostrilSize > 0){ ctx.fillRect(n1X, n1Y, nostrilSize, nostrilSize); ctx.fillRect(n2X, n2Y, nostrilSize, nostrilSize); }
+                    else { console.warn("Invalid nostril coords/size."); }
+                } catch (nostrilError) { handleError(nostrilError, "drawSnakePart - Nostrils"); }
             }
         }
     } catch (partError) { handleError(partError, `drawSnakePart index ${index}`); }
 }
+
+// --- Stage Pop-up Function ---
+function showStagePopup(stageName) {
+    if (!stagePopupElement) return;
+    try {
+        stagePopupElement.textContent = stageName;
+        stagePopupElement.classList.remove('show'); // Remove class first to reset animation if it was already showing
+        void stagePopupElement.offsetWidth; // Trigger reflow to allow animation restart
+        stagePopupElement.classList.add('show');
+
+        // Optional: Remove class after animation duration (1.5s in CSS) + a small buffer
+        // This prevents the element from lingering with opacity 0 but still potentially blocking clicks
+        setTimeout(() => {
+            if (stagePopupElement.classList.contains('show')) {
+                 stagePopupElement.classList.remove('show');
+            }
+        }, 1600); // Slightly longer than animation
+
+    } catch (e) {
+        handleError(e, "showStagePopup");
+    }
+}
+
 function drawSnake() { if (!snake || snake.length === 0) { console.warn("DrawSnake call: Snake invalid."); return; } try { for (let i = snake.length - 1; i >= 0; i--) { drawSnakePart(snake[i], i, snake.length); } } catch(e) { handleError(e, "drawSnake loop"); } }
 function drawFood() { if (!ctx || !food) return; try { const pulseFactor=(Math.sin(Date.now()/config.FOOD_PULSE_SPEED*Math.PI*2)+1)/2; const scale=0.85+pulseFactor*0.15; const pulsatingSize=config.GRID_SIZE*scale; const offset=(config.GRID_SIZE-pulsatingSize)/2; const foodX=food.x*config.GRID_SIZE+offset; const foodY=food.y*config.GRID_SIZE+offset; ctx.shadowBlur=config.GRID_SIZE*0.8; ctx.shadowColor=config.FOOD_GLOW_COLOR; ctx.fillStyle=config.FOOD_COLOR; ctx.strokeStyle=config.FOOD_BORDER_COLOR; ctx.fillRect(foodX,foodY,pulsatingSize,pulsatingSize); ctx.strokeRect(foodX,foodY,pulsatingSize,pulsatingSize); ctx.shadowBlur=0; ctx.shadowColor='transparent'; } catch (e) { handleError(e, "drawFood"); } }
 function drawBackgroundEffects() { if (!ctx) return; try { updateBackgroundParticles(); drawBackgroundParticles(ctx); } catch (e) { handleError(e, "drawBackgroundEffects"); } }
 function drawForegroundEffects() { if (!ctx) return; try { updateEatParticles(); drawEatParticles(ctx); } catch (e) { handleError(e, "drawForegroundEffects"); } }
-function applyScreenShake() { if (!ctx) return; try { const shakeX = (Math.random() - 0.5) * currentShakeIntensity * 2; const shakeY = (Math.random() - 0.5) * currentShakeIntensity * 2; ctx.translate(shakeX, shakeY); } catch(e){ handleError(e, "applyScreenShake"); } }
+function applyScreenShake() {
+    // Now applies shake via CSS transform to the canvas element
+    if (!canvas) return; // Need the canvas element
+    try {
+        const shakeX = (Math.random() - 0.5) * currentShakeIntensity * 2;
+        const shakeY = (Math.random() - 0.5) * currentShakeIntensity * 2;
+        // Apply CSS transform
+        canvas.style.transform = `translate(${shakeX.toFixed(1)}px, ${shakeY.toFixed(1)}px)`;
+        // --- REMOVED DEBUG LOG ---
+    } catch(e){
+        handleError(e, "applyScreenShake");
+        canvas.style.transform = 'translate(0, 0)'; // Reset on error
+    }
+}
 function animateScore() { if (!scoreElement) return; try { scoreElement.classList.remove('score-pop-animation'); void scoreElement.offsetWidth; scoreElement.classList.add('score-pop-animation'); } catch(e){ handleError(e, "animateScore"); } }
 
 // --- Game Logic ---
@@ -277,15 +409,76 @@ function moveSnake() {
         const currentHead = snake[0]; const potentialHeadX = currentHead.x + dx; const potentialHeadY = currentHead.y + dy;
 
         if (config.ENABLE_OBSTACLES && obstacles.some(obs => obs && obs.x === potentialHeadX && obs.y === potentialHeadY)) { handleGameOver(); return; }
-        if (potentialHeadX < 0 || potentialHeadX >= GRID_WIDTH || potentialHeadY < 0 || potentialHeadY >= GRID_HEIGHT) { if (snake.length > 0) snake.pop(); else throw new Error("Wall hit pop empty snake"); if (snake.length < config.MIN_SNAKE_LENGTH) { handleGameOver(); } else { score = Math.max(0, score - config.WALL_HIT_PENALTY); if (scoreElement) scoreElement.textContent = score; shakeDuration = config.SHAKE_DURATION_FRAMES; currentShakeIntensity = config.SHAKE_BASE_INTENSITY; } return; }
+        if (potentialHeadX < 0 || potentialHeadX >= GRID_WIDTH || potentialHeadY < 0 || potentialHeadY >= GRID_HEIGHT) {
+            if (snake.length > 0) snake.pop(); else throw new Error("Wall hit pop empty snake");
+            if (snake.length < config.MIN_SNAKE_LENGTH) {
+                handleGameOver();
+            } else {
+                // Non-fatal wall hit: Apply penalty, shake, and check for stage regression
+                score = Math.max(0, score - config.WALL_HIT_PENALTY);
+                if (scoreElement) scoreElement.textContent = score;
+                shakeDuration = config.SHAKE_DURATION_FRAMES;
+                currentShakeIntensity = config.SHAKE_BASE_INTENSITY;
+
+                // --- Check for Stage Regression ---
+                const currentMinLength = config.stages[currentStageIndex].minLength;
+                if (currentStageIndex > 0 && snake.length < currentMinLength) {
+                    // Find the new correct stage by checking downwards
+                    for (let i = currentStageIndex - 1; i >= 0; i--) {
+                        if (snake.length >= config.stages[i].minLength) {
+                            console.log(`Stage Down! New stage: ${config.stages[i].name} (Index: ${i}) due to length ${snake.length}`);
+                            currentStageIndex = i;
+                            // No pop-up for regression to avoid annoyance
+                            break; // Found the correct lower stage
+                        }
+                    }
+                }
+                // --- End Stage Regression Check ---
+            }
+            return;
+        }
         const newHead = { x: potentialHeadX, y: potentialHeadY };
         for (let i = 1; i < snake.length; i++) { if (snake[i] && newHead.x === snake[i].x && newHead.y === snake[i].y) { handleGameOver(); return; } }
 
         snake.unshift(newHead);
 
-        if (powerUp && newHead.x === powerUp.x && newHead.y === powerUp.y) { playPowerupSound(); activateMultiplier(); spawnEatParticles(powerUp.x * config.GRID_SIZE + config.GRID_SIZE / 2, powerUp.y * config.GRID_SIZE + config.GRID_SIZE / 2, config.POWERUP_COLOR); powerUp = null; }
-        else if (food && newHead.x === food.x && newHead.y === food.y) { const scoreToAdd = isMultiplierActive ? 20 : 10; score += scoreToAdd; if (scoreElement) scoreElement.textContent = score; animateScore(); if (score > highScore) { highScore = score; localStorage.setItem('snakeHighScore', highScore); if (highScoreElement) highScoreElement.textContent = highScore; } playSound(eatSound, "Eat"); spawnEatParticles(food.x * config.GRID_SIZE + config.GRID_SIZE / 2, food.y * config.GRID_SIZE + config.GRID_SIZE / 2, config.FOOD_COLOR); placeFood(); maybeSpawnPowerup(); gameSpeed = Math.max(config.MIN_GAME_SPEED, gameSpeed - config.SPEED_INCREMENT); }
-        else { if (snake.length > 0) snake.pop(); else throw new Error("No collision pop empty snake"); }
+        if (powerUp && newHead.x === powerUp.x && newHead.y === powerUp.y) {
+            // Power-up collision
+            playPowerupSound();
+            activateMultiplier();
+            spawnEatParticles(powerUp.x * config.GRID_SIZE + config.GRID_SIZE / 2, powerUp.y * config.GRID_SIZE + config.GRID_SIZE / 2, config.POWERUP_COLOR);
+            powerUp = null;
+        } else if (food && newHead.x === food.x && newHead.y === food.y) {
+            // Food collision
+            const scoreToAdd = isMultiplierActive ? 20 : 10;
+            score += scoreToAdd;
+            if (scoreElement) scoreElement.textContent = score;
+            animateScore();
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('snakeHighScore', highScore);
+                if (highScoreElement) highScoreElement.textContent = highScore;
+            }
+            playSound(eatSound, "Eat");
+            spawnEatParticles(food.x * config.GRID_SIZE + config.GRID_SIZE / 2, food.y * config.GRID_SIZE + config.GRID_SIZE / 2, config.FOOD_COLOR);
+            placeFood();
+            maybeSpawnPowerup();
+            gameSpeed = Math.max(config.MIN_GAME_SPEED, gameSpeed - config.SPEED_INCREMENT);
+
+            // --- Check for Stage Up ---
+            const nextStageIndex = currentStageIndex + 1;
+            if (nextStageIndex < config.stages.length && snake.length >= config.stages[nextStageIndex].minLength) {
+                currentStageIndex = nextStageIndex;
+                console.log(`Stage Up! New stage: ${config.stages[currentStageIndex].name} (Index: ${currentStageIndex})`);
+                showStagePopup(config.stages[currentStageIndex].name);
+                // Optionally add a unique sound effect for stage up here
+            }
+            // --- End Stage Up Check ---
+
+        } else {
+            // No collision - remove tail segment
+            if (snake.length > 0) snake.pop(); else throw new Error("No collision pop empty snake");
+        }
 
         updateMultiplier();
         if (!isGameOver && snake.length < config.MIN_SNAKE_LENGTH) { handleGameOver(); }
@@ -293,7 +486,66 @@ function moveSnake() {
 }
 function placeFood() { let newPos, attempts = 0; const maxAttempts = GRID_WIDTH * GRID_HEIGHT * 3; console.log("Attempting to place food..."); food = null; try { do { newPos = { x: Math.floor(Math.random() * GRID_WIDTH), y: Math.floor(Math.random() * GRID_HEIGHT) }; attempts++; if (attempts > maxAttempts) { console.error(`CRITICAL: Could not place food after ${maxAttempts} attempts.`); return; } } while (isPositionOccupied(newPos, true, config.ENABLE_OBSTACLES, true)); food = newPos; console.log(`Placed food at: (${food.x}, ${food.y}) after ${attempts} attempts.`); } catch(e) { handleError(e, "placeFood"); food = null; } }
 function isFoodOnSnake(position) { if (!snake || !position) return false; return snake.some(segment => segment && segment.x === position.x && segment.y === position.y); }
-function handleGameOver() { console.log("GAME OVER triggered."); if (isGameOver) return; try { isGameOver = true; isPaused = true; clearTimeout(gameLoopTimeout); if(startPauseButton) { startPauseButton.textContent = "Start"; startPauseButton.disabled = true; } if(bgMusic) bgMusic.pause(); playOopsSound(); if (ctx) { console.log("Performing final game over draw..."); clearCanvas(); drawBackgroundEffects(); if (config.ENABLE_OBSTACLES) drawObstacles(); if (food) drawFood(); if (powerUp) drawPowerup(); if (snake && snake.length > 0) drawSnake(); else console.warn("Snake invalid/empty on game over draw."); } else { console.error("Cannot perform final draw - ctx missing."); } if (gameOverElement && finalScoreValueElement) { finalScoreValueElement.textContent = score; gameOverElement.style.display = 'block'; gameOverElement.style.animation = 'none'; void gameOverElement.offsetWidth; gameOverElement.style.animation = 'fadeInGameOver 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards 0.1s'; } else { console.warn("Game over UI elements missing."); } isMultiplierActive = false; multiplierTimer = 0; updateMultiplierDisplay(); } catch(e) { handleError(e, "handleGameOver"); } }
+function handleGameOver() {
+    console.log("GAME OVER triggered.");
+    if (isGameOver) return;
+    try {
+        isGameOver = true;
+        isPaused = true;
+        clearTimeout(gameLoopTimeout);
+        if(startPauseButton) { startPauseButton.textContent = "Start"; startPauseButton.disabled = true; }
+        if(bgMusic) bgMusic.pause();
+        playOopsSound();
+
+        // --- Apply Game Over Shake ---
+        if (canvas) {
+            const intensity = 15; // Intensity for game over shake
+            const durationMs = 500; // Duration in milliseconds
+            let startTime = performance.now();
+            function gameOverShake(currentTime) {
+                const elapsedTime = currentTime - startTime;
+                if (elapsedTime < durationMs) {
+                    const progress = elapsedTime / durationMs;
+                    const currentIntensity = intensity * (1 - progress); // Fade out intensity
+                    const shakeX = (Math.random() - 0.5) * currentIntensity * 2;
+                    const shakeY = (Math.random() - 0.5) * currentIntensity * 2;
+                    canvas.style.transform = `translate(${shakeX.toFixed(1)}px, ${shakeY.toFixed(1)}px)`;
+                    requestAnimationFrame(gameOverShake);
+                } else {
+                    canvas.style.transform = 'translate(0, 0)'; // Reset at the end
+                }
+            }
+            requestAnimationFrame(gameOverShake);
+        }
+        // --- End Game Over Shake ---
+
+        if (ctx) {
+            console.log("Performing final game over draw...");
+            // Note: Final draw might happen before or during shake animation finishes
+            clearCanvas();
+            drawBackgroundEffects();
+            if (config.ENABLE_OBSTACLES) drawObstacles();
+            if (food) drawFood();
+            if (powerUp) drawPowerup();
+            if (snake && snake.length > 0) drawSnake(); else console.warn("Snake invalid/empty on game over draw.");
+        } else { console.error("Cannot perform final draw - ctx missing."); }
+
+        if (gameOverElement && finalScoreValueElement) {
+            finalScoreValueElement.textContent = score;
+            gameOverElement.style.display = 'block';
+            gameOverElement.style.animation = 'none';
+            void gameOverElement.offsetWidth; // Trigger reflow
+            gameOverElement.style.animation = 'fadeInGameOver 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards 0.1s';
+        } else { console.warn("Game over UI elements missing."); }
+
+        isMultiplierActive = false;
+        multiplierTimer = 0;
+        updateMultiplierDisplay();
+    } catch(e) {
+        handleError(e, "handleGameOver");
+        if (canvas) canvas.style.transform = 'translate(0, 0)'; // Ensure reset on error
+    }
+}
 
 // --- Input & Control Handling ---
 function updateDirection(newDx, newDy) { if (changingDirection || isGameOver || isPaused) return false; const goingUp = dy === -1, goingDown = dy === 1, goingLeft = dx === -1, goingRight = dx === 1; if ((newDy === -1 && goingDown) || (newDy === 1 && goingUp) || (newDx === -1 && goingRight) || (newDx === 1 && goingLeft)) { return false; } if (newDx !== dx || newDy !== dy) { dx = newDx; dy = newDy; changingDirection = true; console.log(`Direction changed: dx=${dx}, dy=${dy}`); return true; } return false; }
@@ -307,9 +559,64 @@ function updateVolume() { /* Volume applied before playing */ }
 function updateMusicVolume() { try { if(bgMusic) { bgMusic.volume = parseFloat(musicVolumeSlider.value); } } catch(e){ handleError(e, "updateMusicVolume");} }
 
 // --- Config Modal Logic ---
-function openConfigModal() { try { console.log("Opening config modal..."); if (!isPaused && !isGameOver) togglePause(); if (!configModal || !configSpeedInput || !configSnakeColorInput || !configFoodColorInput || !configBgColorInput || !configObstacleColorInput || !configPowerupColorInput || !configEnableObstaclesInput || !configObstacleCountInput ) throw new Error("Config modal elements missing."); configSpeedInput.value = config.INITIAL_GAME_SPEED; configSnakeColorInput.value = config.SNAKE_COLOR; configFoodColorInput.value = config.FOOD_COLOR; configBgColorInput.value = config.BACKGROUND_COLOR; configObstacleColorInput.value = config.OBSTACLE_COLOR; configPowerupColorInput.value = config.POWERUP_COLOR; configEnableObstaclesInput.checked = config.ENABLE_OBSTACLES; configObstacleCountInput.value = config.OBSTACLE_COUNT; configObstacleCountInput.disabled = !config.ENABLE_OBSTACLES; configModal.style.display = 'block'; setTimeout(() => configModal.classList.add('open'), 10); } catch(e){ handleError(e, "openConfigModal");} }
+function openConfigModal() {
+    try {
+        console.log("Opening config modal...");
+        if (!isPaused && !isGameOver) togglePause();
+        if (!configModal || !configSpeedInput /* REMOVED: || !configSnakeColorInput */ || !configFoodColorInput || !configBgColorInput || !configObstacleColorInput || !configPowerupColorInput || !configEnableObstaclesInput || !configObstacleCountInput ) throw new Error("Config modal elements missing.");
+
+        // --- Apply Inverse Speed Mapping for Display ---
+        const currentDelay = config.INITIAL_GAME_SPEED;
+        const delayRatio = (MAX_GAME_DELAY - currentDelay) / (MAX_GAME_DELAY - config.MIN_GAME_SPEED);
+        const displaySpeedValue = Math.round(MIN_SPEED_INPUT + delayRatio * (MAX_SPEED_INPUT - MIN_SPEED_INPUT));
+        configSpeedInput.value = displaySpeedValue;
+        console.log(`Current Initial Delay: ${currentDelay}, Calculated Display Speed: ${displaySpeedValue}`);
+        // --- End Inverse Speed Mapping ---
+
+        /* REMOVED: configSnakeColorInput.value = config.SNAKE_COLOR; */
+        configFoodColorInput.value = config.FOOD_COLOR;
+        configBgColorInput.value = config.BACKGROUND_COLOR;
+        configObstacleColorInput.value = config.OBSTACLE_COLOR;
+        configPowerupColorInput.value = config.POWERUP_COLOR;
+        configEnableObstaclesInput.checked = config.ENABLE_OBSTACLES;
+        configObstacleCountInput.value = config.OBSTACLE_COUNT;
+        configObstacleCountInput.disabled = !config.ENABLE_OBSTACLES;
+
+        configModal.style.display = 'block';
+        setTimeout(() => configModal.classList.add('open'), 10);
+    } catch(e){ handleError(e, "openConfigModal");}
+}
 function closeConfigModal() { try { if (!configModal) return; console.log("Closing config modal..."); configModal.classList.remove('open'); setTimeout(() => { if (!configModal.classList.contains('open')) configModal.style.display = 'none'; }, 300); } catch(e){ handleError(e, "closeConfigModal");} }
-function applyConfiguration() { try { if (!configSpeedInput || !configSnakeColorInput || !configFoodColorInput || !configBgColorInput || !configObstacleColorInput || !configPowerupColorInput || !configEnableObstaclesInput || !configObstacleCountInput) throw new Error("Cannot apply config - input elements missing."); console.log("Applying configuration..."); config.INITIAL_GAME_SPEED = parseInt(configSpeedInput.value) || config.INITIAL_GAME_SPEED; config.SNAKE_COLOR = configSnakeColorInput.value || config.SNAKE_COLOR; config.FOOD_COLOR = configFoodColorInput.value || config.FOOD_COLOR; config.BACKGROUND_COLOR = configBgColorInput.value || config.BACKGROUND_COLOR; config.OBSTACLE_COLOR = configObstacleColorInput.value || config.OBSTACLE_COLOR; config.POWERUP_COLOR = configPowerupColorInput.value || config.POWERUP_COLOR; config.ENABLE_OBSTACLES = configEnableObstaclesInput.checked; config.OBSTACLE_COUNT = parseInt(configObstacleCountInput.value) >= 0 ? parseInt(configObstacleCountInput.value) : config.OBSTACLE_COUNT; saveConfig(); closeConfigModal(); initializeGame(); } catch(e){ handleError(e, "applyConfiguration");} }
+function applyConfiguration() {
+    try {
+        if (!configSpeedInput /* REMOVED: || !configSnakeColorInput */ || !configFoodColorInput || !configBgColorInput || !configObstacleColorInput || !configPowerupColorInput || !configEnableObstaclesInput || !configObstacleCountInput) throw new Error("Cannot apply config - input elements missing.");
+        console.log("Applying configuration...");
+
+        // --- Apply Speed Mapping ---
+        const speedInputValue = parseInt(configSpeedInput.value);
+        if (!isNaN(speedInputValue) && speedInputValue >= MIN_SPEED_INPUT && speedInputValue <= MAX_SPEED_INPUT) {
+            // Linear interpolation: Map input range [MIN_SPEED_INPUT, MAX_SPEED_INPUT] to delay range [MAX_GAME_DELAY, config.MIN_GAME_SPEED]
+            const speedRatio = (speedInputValue - MIN_SPEED_INPUT) / (MAX_SPEED_INPUT - MIN_SPEED_INPUT);
+            config.INITIAL_GAME_SPEED = Math.round(MAX_GAME_DELAY - speedRatio * (MAX_GAME_DELAY - config.MIN_GAME_SPEED));
+            console.log(`Speed Input: ${speedInputValue}, Calculated Initial Delay: ${config.INITIAL_GAME_SPEED}`);
+        } else {
+            console.warn(`Invalid speed input value: ${configSpeedInput.value}. Using previous initial speed: ${config.INITIAL_GAME_SPEED}`);
+        }
+        // --- End Speed Mapping ---
+
+        /* REMOVED: config.SNAKE_COLOR = configSnakeColorInput.value || config.SNAKE_COLOR; */
+        config.FOOD_COLOR = configFoodColorInput.value || config.FOOD_COLOR;
+        config.BACKGROUND_COLOR = configBgColorInput.value || config.BACKGROUND_COLOR;
+        config.OBSTACLE_COLOR = configObstacleColorInput.value || config.OBSTACLE_COLOR;
+        config.POWERUP_COLOR = configPowerupColorInput.value || config.POWERUP_COLOR;
+        config.ENABLE_OBSTACLES = configEnableObstaclesInput.checked;
+        config.OBSTACLE_COUNT = parseInt(configObstacleCountInput.value) >= 0 ? parseInt(configObstacleCountInput.value) : config.OBSTACLE_COUNT;
+
+        saveConfig();
+        closeConfigModal();
+        initializeGame();
+    } catch(e){ handleError(e, "applyConfiguration");}
+}
 
 // --- Game Loop ---
 function gameLoop() {
@@ -317,27 +624,52 @@ function gameLoop() {
     changingDirection = false;
     gameLoopTimeout = setTimeout(() => {
         if (isPaused || isGameOver) return;
-        if (!ctx) { handleError(new Error("Ctx missing in loop timeout"), "gameLoop Timeout"); return; }
+        if (!ctx || !canvas) { handleError(new Error("Ctx or Canvas missing in loop timeout"), "gameLoop Timeout"); return; } // Added canvas check
         try {
-            ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
-            if (shakeDuration > 0) { applyScreenShake(); shakeDuration--; if (shakeDuration <= 0) currentShakeIntensity = 0; }
+            // REMOVED: ctx.save(); // No longer needed for shake
+
+            // Apply or reset CSS shake
+            if (shakeDuration > 0) {
+                applyScreenShake(); // Applies CSS transform
+                shakeDuration--;
+                if (shakeDuration <= 0) {
+                    currentShakeIntensity = 0;
+                    canvas.style.transform = 'translate(0, 0)'; // Reset CSS transform when shake ends
+                }
+            } else {
+                 // Ensure transform is reset if shakeDuration was already 0
+                 if (canvas.style.transform !== 'translate(0px, 0px)' && canvas.style.transform !== '') { // Avoid unnecessary resets
+                    canvas.style.transform = 'translate(0, 0)';
+                 }
+            }
 
             clearCanvas();
             drawBackgroundEffects();
             if (config.ENABLE_OBSTACLES) drawObstacles();
-            if (food) drawFood(); else { console.warn("Loop: Food missing."); placeFood(); if(food) drawFood(); else { handleError(new Error("Food missing & cannot be placed."), "gameLoop - Food Check"); ctx.restore(); return; } } // Place or fail
+            if (food) drawFood(); else { console.warn("Loop: Food missing."); placeFood(); if(food) drawFood(); else { handleError(new Error("Food missing & cannot be placed."), "gameLoop - Food Check"); /* REMOVED: ctx.restore(); */ return; } } // Place or fail
             if (powerUp) drawPowerup();
 
             moveSnake();
 
             if (!isGameOver) {
                 if (snake && snake.length > 0) { drawSnake(); }
-                else { handleError(new Error("Snake disappeared unexpectedly after move."), "gameLoop - Draw Check"); ctx.restore(); return; }
+                else { handleError(new Error("Snake disappeared unexpectedly after move."), "gameLoop - Draw Check"); /* REMOVED: ctx.restore(); */ return; }
                 drawForegroundEffects();
-                ctx.restore();
+                // REMOVED: ctx.restore(); // No longer needed for shake
                 gameLoop();
-            } else { ctx.restore(); } // Restore if game over happened in moveSnake
-        } catch (error) { handleError(error, "gameLoop Tick Execution"); try { ctx.restore(); } catch(restoreError){ console.error("Error restoring context after loop error:", restoreError); } }
+            } else {
+                // Ensure transform is reset on game over
+                if (canvas.style.transform !== 'translate(0px, 0px)' && canvas.style.transform !== '') {
+                    canvas.style.transform = 'translate(0, 0)';
+                }
+                // REMOVED: ctx.restore(); // No longer needed for shake
+            }
+        } catch (error) {
+             handleError(error, "gameLoop Tick Execution");
+             // Ensure transform is reset on error
+             try { if (canvas) canvas.style.transform = 'translate(0, 0)'; } catch(resetError){ console.error("Error resetting canvas transform after loop error:", resetError); }
+             // REMOVED: try { ctx.restore(); } catch(restoreError){ console.error("Error restoring context after loop error:", restoreError); }
+        }
     }, gameSpeed);
 }
 

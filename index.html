@@ -25,6 +25,9 @@
                 <div>High Score: <span id="highScore">0</span></div>
             </div>
 
+            <!-- Stage Pop-up Element -->
+            <div id="stagePopup" class="stage-popup"></div>
+
             <canvas id="gameCanvas" width="450" height="450">
                 Your browser does not support the HTML canvas tag.
             </canvas>
@@ -62,13 +65,10 @@
             <h2>Configuration</h2>
             <div class="config-options">
                 <div class="config-group">
-                    <label for="configSpeed">Initial Speed (lower=faster):</label>
+                    <label for="configSpeed">Initial Speed (higher=faster):</label>
                     <input type="number" id="configSpeed" min="50" max="300" step="10">
                 </div>
-                <div class="config-group">
-                    <label for="configSnakeColor">Snake Color:</label>
-                    <input type="color" id="configSnakeColor">
-                </div>
+                <!-- Removed Snake Color Config Group -->
                  <div class="config-group">
                     <label for="configFoodColor">Food Color:</label>
                     <input type="color" id="configFoodColor">

@@ -50,7 +50,7 @@ body {
     display: flex; justify-content: center; align-items: center; min-height: 100vh;
     background: linear-gradient(135deg, var(--bg-gradient-start), var(--bg-gradient-mid), var(--bg-gradient-end));
     font-family: 'Poppins', sans-serif; color: var(--text-dark); padding: 10px;
-    overflow-x: hidden; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none;
+    /* REMOVED: overflow-x: hidden; */ -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none;
     -webkit-tap-highlight-color: transparent;
 }
 
@@ -74,7 +74,48 @@ h1 { font-family: 'Press Start 2P', cursive; font-size: 1.4em; color: var(--text
 .score-pop-animation { display: inline-block; animation: scorePop 0.4s ease-out; }
 
 /* Canvas */
-#gameCanvas { border: 5px solid var(--canvas-border); display: block; background-color: var(--game-bg-color); box-shadow: 0 0 15px rgba(0,0,0,0.4) inset; border-radius: 5px; max-width: 100%; height: auto; image-rendering: pixelated; overflow: hidden; touch-action: none; }
+#gameCanvas { border: 5px solid var(--canvas-border); display: block; background-color: var(--game-bg-color); box-shadow: 0 0 15px rgba(0,0,0,0.4) inset; border-radius: 5px; max-width: 100%; height: auto; image-rendering: pixelated; /* REMOVED: overflow: hidden; */ touch-action: none; position: relative; /* Needed for absolute positioning of popup */ }
+
+/* Stage Pop-up Styling */
+.stage-popup {
+    position: absolute;
+    top: 40%; /* Adjust as needed */
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 10px 20px;
+    background: linear-gradient(45deg, #ff6b6b, #feca57, #48dbfb, #ff9ff3);
+    background-size: 400% 400%;
+    color: white;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 1.5em; /* Adjust size */
+    border-radius: 10px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    pointer-events: none; /* Prevent interaction */
+    z-index: 10; /* Ensure it's above canvas */
+    white-space: nowrap; /* Prevent wrapping */
+    transition: opacity 0.3s ease-out; /* Fade out */
+}
+
+.stage-popup.show {
+    animation: stagePopEffect 1.5s forwards, gradientShift 3s ease infinite;
+}
+
+@keyframes stagePopEffect {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+    20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+    40% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    80% { opacity: 1; transform: translate(-50%, -50%) scale(1); } /* Hold */
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1); } /* Fade out */
+}
+
+@keyframes gradientShift {
+	0% { background-position: 0% 50%; }
+	50% { background-position: 100% 50%; }
+	100% { background-position: 0% 50%; }
+}
+
 
 /* Game Over Message Styling */
 .game-over-container { display: none; margin-top: 20px; padding: 15px 20px; background-color: rgba(40, 40, 40, 0.9); border-radius: 10px; color: #fff; text-align: center; box-shadow: 0 5px 15px rgba(0,0,0,0.4); opacity: 0; transform: translateY(15px) scale(0.98); /* Animation applied via JS */ }
