@@ -7,6 +7,7 @@ const ctx = canvas ? canvas.getContext('2d') : null;
 const scoreElement = document.getElementById('score');
 const scoreMultiplierElement = document.getElementById('scoreMultiplier');
 const highScoreElement = document.getElementById('highScore');
+const speedDisplayElement = document.getElementById('speedDisplay'); // Added for speed display
 const gameOverElement = document.getElementById('gameOver');
 const finalScoreValueElement = document.getElementById('finalScoreValue');
 const titleContainerElement = document.getElementById('titleContainer');
@@ -57,11 +58,50 @@ let config = {
     GRID_SIZE: 30, INITIAL_GAME_SPEED: 180,
     // REMOVED old snake appearance config: SNAKE_COLOR, SNAKE_BORDER_COLOR, SNAKE_GLOW_COLOR, EYE_APPEAR_LENGTH, TEEN_LENGTH, ADULT_LENGTH, TEEN_PATTERN_COLOR, TEEN_BORDER_COLOR, NOSTRIL_COLOR
     FOOD_COLOR: '#90EE90', FOOD_BORDER_COLOR: '#7CCD7C', FOOD_GLOW_COLOR: 'rgba(173, 255, 47, 0.6)',
+    // REMOVED SPECIAL_FOOD_COLOR, SPECIAL_FOOD_BORDER_COLOR, SPECIAL_FOOD_GLOW_COLOR
     BACKGROUND_COLOR: '#005000', OBSTACLE_COLOR: '#555555', OBSTACLE_BORDER_COLOR: '#333333',
-    POWERUP_COLOR: '#ffd700', POWERUP_BORDER_COLOR: '#e6c200', POWERUP_GLOW_COLOR: 'rgba(255, 215, 0, 0.7)',
+    POWERUP_COLOR: '#ffd700', POWERUP_BORDER_COLOR: '#e6c200', POWERUP_GLOW_COLOR: 'rgba(255, 215, 0, 0.7)', // Note: Powerup is separate from special food
+    SPECIAL_FOOD_SPAWN_CHANCE: 0.15, // Increased chance slightly
+    // REMOVED SPECIAL_FOOD_SPEED_EFFECT
+    SPECIAL_FOOD_TIMER_COLOR: 'rgba(255, 255, 255, 0.6)', // Color for the countdown timer
     WALL_HIT_PENALTY: 5, MIN_GAME_SPEED: 60, SPEED_INCREMENT: 3, MIN_SNAKE_LENGTH: 1,
     FOOD_PULSE_SPEED: 300, MIN_SNAKE_OPACITY: 0.3, GAME_OVER_HEAD_SCALE: 2.0,
     BACKGROUND_PARTICLE_COUNT: 40, EAT_PARTICLE_COUNT: 20,
+
+    // --- Special Food Types ---
+    specialFoodTypes: [
+        {
+            name: "Slowdown",
+            color: '#87CEEB', // Sky Blue
+            borderColor: '#6495ED',
+            glowColor: 'rgba(135, 206, 235, 0.7)',
+            shape: 'diamond', // 'diamond', 'square', 'triangle' etc.
+            durationMs: 8000, // 8 seconds
+            effect: { type: 'speed', value: 30 }, // Adds 30ms to gameSpeed (slows down)
+            spawnWeight: 5 // Higher weight = more common
+        },
+        {
+            name: "Bonus Points",
+            color: '#FFD700', // Gold
+            borderColor: '#B8860B',
+            glowColor: 'rgba(255, 215, 0, 0.8)',
+            shape: 'star', // Custom shape needed in drawFood
+            durationMs: 6000, // 6 seconds
+            effect: { type: 'score', value: 50 }, // Adds 50 points directly
+            spawnWeight: 3
+        },
+        {
+            name: "Shrink", // New type: temporarily shrinks snake
+            color: '#9370DB', // Medium Purple
+            borderColor: '#7A5BC8',
+            glowColor: 'rgba(147, 112, 219, 0.7)',
+            shape: 'triangle',
+            durationMs: 10000, // 10 seconds
+            effect: { type: 'shrink', value: 3 }, // Removes up to 3 segments (min length respected)
+            spawnWeight: 2
+        }
+        // Add more types here later if desired
+    ],
     SHAKE_BASE_INTENSITY: 3, SHAKE_DURATION_FRAMES: 6, // For wall hit shake
     OBSTACLE_COUNT: 5, POWERUP_SPAWN_CHANCE: 0.05, POWERUP_DURATION_FRAMES: 300,
     ENABLE_OBSTACLES: true,
@@ -86,7 +126,7 @@ let CANVAS_WIDTH = 450; let CANVAS_HEIGHT = 450; let GRID_WIDTH = 15; let GRID_H
 
 // --- Game State Variables ---
 let snake, food = null, dx, dy, changingDirection, score, highScore = 0;
-let gameSpeed, gameLoopTimeout, isGameOver, isPaused = true, currentHue = 0;
+let gameSpeed, gameLoopTimeout, isGameOver, isPaused = true, currentHue = 0, highScoreBrokenThisGame = false;
 let rainbowInterval, gameStarted = false;
 let backgroundParticles = []; let eatParticles = [];
 let shakeDuration = 0; let currentShakeIntensity = 0;
@@ -170,7 +210,9 @@ function initializeGame() {
         changingDirection = false; isGameOver = false; isPaused = true; gameStarted = false;
         shakeDuration = 0; eatParticles = []; powerUp = null; isMultiplierActive = false; multiplierTimer = 0;
         currentStageIndex = 0; // Reset stage index
+        highScoreBrokenThisGame = false; // Reset high score flag for the new game
         updateMultiplierDisplay();
+        updateSpeedDisplay(); // Add call here
 
         highScore = parseInt(localStorage.getItem('snakeHighScore') || '0');
         if (scoreElement) scoreElement.textContent = score;
@@ -226,7 +268,49 @@ class Particle {
 function initializeBackgroundParticles() { backgroundParticles = []; const count = config.BACKGROUND_PARTICLE_COUNT; console.log(`Initializing ${count} background particles.`); for (let i = 0; i < count; i++) { backgroundParticles.push(new Particle( Math.random() * CANVAS_WIDTH, Math.random() * CANVAS_HEIGHT, (Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.3, Infinity, 'rgba(255, 255, 255, 0.15)', Math.random() * 1.8 + 0.5 )); } }
 function updateBackgroundParticles() { backgroundParticles.forEach(p => { p.update(); if (p.x < 0) p.x = CANVAS_WIDTH; if (p.x > CANVAS_WIDTH) p.x = 0; if (p.y < 0) p.y = CANVAS_HEIGHT; if (p.y > CANVAS_HEIGHT) p.y = 0; }); }
 function drawBackgroundParticles(ctx) { if (!ctx) return; backgroundParticles.forEach(p => p.draw(ctx)); }
-function spawnEatParticles(x, y, color) { const count = config.EAT_PARTICLE_COUNT; const baseColor = color || config.FOOD_COLOR; for (let i = 0; i < count; i++) { const angle = Math.random() * Math.PI * 2; const speed = Math.random() * 2.5 + 0.8; eatParticles.push(new Particle( x, y, Math.cos(angle) * speed, Math.sin(angle) * speed, Math.random() * 40 + 25, baseColor, Math.random() * 2.5 + 1 )); } }
+function spawnEatParticles(x, y, color) {
+    const count = config.EAT_PARTICLE_COUNT * 2; // Double the particles
+    const baseColor = color || config.FOOD_COLOR;
+    for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 3.5 + 1.2; // Faster particles
+        const life = Math.random() * 50 + 30; // Longer lifespan
+        const size = Math.random() * 3 + 1.5; // Larger particles
+        
+        // Add some color variation
+        const hueVariation = Math.random() * 30 - 15;
+        const satVariation = Math.random() * 20 + 80;
+        const lightVariation = Math.random() * 20 + 60;
+        const particleColor = `hsl(${getHue(baseColor) + hueVariation}, ${satVariation}%, ${lightVariation}%)`;
+        
+        eatParticles.push(new Particle(
+            x, y,
+            Math.cos(angle) * speed,
+            Math.sin(angle) * speed,
+            life,
+            particleColor,
+            size
+        ));
+    }
+}
+
+// Helper function to extract hue from color
+function getHue(color) {
+    const hex = color.replace('#', '');
+    const r = parseInt(hex.substring(0,2), 16) / 255;
+    const g = parseInt(hex.substring(2,4), 16) / 255;
+    const b = parseInt(hex.substring(4,6), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h;
+    
+    if (max === min) h = 0;
+    else if (max === r) h = ((g - b) / (max - min)) % 6;
+    else if (max === g) h = (b - r) / (max - min) + 2;
+    else h = (r - g) / (max - min) + 4;
+    
+    h = Math.round(h * 60);
+    return h < 0 ? h + 360 : h;
+}
 function updateEatParticles() { eatParticles = eatParticles.filter(p => p.life > 0); eatParticles.forEach(p => p.update()); }
 function drawEatParticles(ctx) { if (!ctx) return; eatParticles.forEach(p => p.draw(ctx)); }
 
@@ -243,10 +327,38 @@ function activateMultiplier() { if (isMultiplierActive) return; isMultiplierActi
 function updateMultiplier() { if (isMultiplierActive) { multiplierTimer--; if (multiplierTimer <= 0) { isMultiplierActive = false; multiplierTimer = 0; console.log("Score Multiplier Deactivated."); updateMultiplierDisplay(); } } }
 function updateMultiplierDisplay() { if (!scoreMultiplierElement) return; try { if (isMultiplierActive) { scoreMultiplierElement.textContent = '(x2)'; scoreMultiplierElement.classList.remove('multiplier-inactive'); scoreMultiplierElement.classList.add('multiplier-active'); } else { scoreMultiplierElement.textContent = '(x1)'; scoreMultiplierElement.classList.remove('multiplier-active'); scoreMultiplierElement.classList.add('multiplier-inactive'); } } catch(e){ handleError(e, "updateMultiplierDisplay"); } }
 
+// --- Speed Display Function ---
+function updateSpeedDisplay() {
+    if (!speedDisplayElement) return;
+    try {
+        // Map internal gameSpeed (delay in ms) to the user-facing config speed range (higher value = faster)
+        const minDelay = config.MIN_GAME_SPEED; // Fastest internal speed (shortest delay)
+        const maxDelay = MAX_GAME_DELAY;        // Slowest internal speed (longest delay)
+        const minInput = MIN_SPEED_INPUT;       // Slowest user input
+        const maxInput = MAX_SPEED_INPUT;       // Fastest user input
+
+        let displaySpeed;
+        if (maxDelay === minDelay) { // Avoid division by zero
+            displaySpeed = maxInput; // If range is zero, assume max speed
+        } else {
+            // Inverse linear interpolation
+            const speedRatio = (maxDelay - gameSpeed) / (maxDelay - minDelay);
+            displaySpeed = minInput + (maxInput - minInput) * speedRatio;
+        }
+
+        // Clamp and round the value
+        displaySpeed = Math.round(Math.max(minInput, Math.min(maxInput, displaySpeed)));
+
+        speedDisplayElement.textContent = displaySpeed;
+    } catch(e) {
+        handleError(e, "updateSpeedDisplay");
+        speedDisplayElement.textContent = "ERR"; // Show error on display
+    }
+}
 
 // --- Drawing Functions ---
 function clearCanvas() { if (!ctx) return; try { const bgColor = config.BACKGROUND_COLOR || '#000000'; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = bgColor; ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT); } catch (e) { handleError(e, "clearCanvas"); } }
-function drawSnakePart(segment, index, totalLength) {
+function drawSnakePart(segment, index, totalLength, expression = 'normal') {
     if (!ctx || !segment || typeof segment.x !== 'number' || typeof segment.y !== 'number') { console.error(`drawSnakePart ABORTED index ${index}: Invalid ctx or segment:`, segment); return; }
     try {
         const currentStage = config.stages[currentStageIndex]; // Get current stage properties
@@ -317,7 +429,7 @@ function drawSnakePart(segment, index, totalLength) {
                     const eyeSizeRatio = 0.2, eyeOffsetRatio = 0.25;
                     const eyeSize = currentGridSize * eyeSizeRatio;
                     const offset = currentGridSize * eyeOffsetRatio;
-                    if (isGameOver) { // Dead Eyes
+                    if (isGameOver) { // Dead Eyes (X marks)
                         const centerX = drawX + currentGridSize / 2, centerY = drawY + currentGridSize / 2;
                         const crossSize = currentGridSize * 0.4;
                         ctx.lineWidth = Math.max(1, currentGridSize * 0.08);
@@ -327,32 +439,150 @@ function drawSnakePart(segment, index, totalLength) {
                         ctx.moveTo(centerX + crossSize / 2, centerY - crossSize / 2); ctx.lineTo(centerX - crossSize / 2, centerY + crossSize / 2);
                         ctx.stroke();
                         ctx.lineWidth = 1;
-                    } else { // Normal Eyes
+                    } else if (expression === 'happy') { // Happy eyes (sparkling) + blush
+                        const eyeRadius = currentGridSize * 0.15;
+                        const sparkleRadius = eyeRadius * 0.4;
+                        const eyeOffsetY = currentGridSize * 0.3; // Vertical position
+                        const eyeOffsetX = currentGridSize * 0.28; // Horizontal separation
+
+                        const eye1X = drawX + currentGridSize / 2 - eyeOffsetX;
+                        const eye1Y = drawY + eyeOffsetY;
+                        const eye2X = drawX + currentGridSize / 2 + eyeOffsetX;
+                        const eye2Y = drawY + eyeOffsetY;
+
+                        // Draw eyes
                         ctx.fillStyle = EYE_COLOR;
-                        let eye1X, eye1Y, eye2X, eye2Y;
-                        if (typeof dx !== 'number' || typeof dy !== 'number') throw new Error("Invalid dx/dy for eyes");
-                        if (dx !== 0) { eye1X = drawX + (dx > 0 ? currentGridSize - eyeSize - offset : offset); eye2X = eye1X; eye1Y = drawY + offset; eye2Y = drawY + currentGridSize - offset - eyeSize; }
-                        else { eye1Y = drawY + (dy > 0 ? currentGridSize - eyeSize - offset : offset); eye2Y = eye1Y; eye1X = drawX + offset; eye2X = drawX + currentGridSize - offset - eyeSize; }
-                        if (typeof eye1X !== 'number' || typeof eye1Y !== 'number' || typeof eye2X !== 'number' || typeof eye2Y !== 'number' || typeof eyeSize !== 'number' || eyeSize <= 0) throw new Error("Invalid eye coords/size calculated");
-                        ctx.fillRect(eye1X, eye1Y, eyeSize, eyeSize); ctx.fillRect(eye2X, eye2Y, eyeSize, eyeSize);
+                        ctx.beginPath();
+                        ctx.arc(eye1X, eye1Y, eyeRadius, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.beginPath();
+                        ctx.arc(eye2X, eye2Y, eyeRadius, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        // Draw sparkles (top-leftish)
+                        ctx.fillStyle = 'white';
+                        ctx.beginPath();
+                        ctx.arc(eye1X - eyeRadius * 0.3, eye1Y - eyeRadius * 0.3, sparkleRadius, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.beginPath();
+                        ctx.arc(eye2X - eyeRadius * 0.3, eye2Y - eyeRadius * 0.3, sparkleRadius, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        // Draw blush marks
+                        const blushRadius = currentGridSize * 0.1;
+                        const blushOffsetY = currentGridSize * 0.55;
+                        const blushOffsetX = currentGridSize * 0.35;
+                        ctx.fillStyle = 'rgba(255, 105, 180, 0.7)'; // Pink blush
+                        ctx.beginPath();
+                        ctx.arc(drawX + currentGridSize / 2 - blushOffsetX, drawY + blushOffsetY, blushRadius, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.beginPath();
+                        ctx.arc(drawX + currentGridSize / 2 + blushOffsetX, drawY + blushOffsetY, blushRadius, 0, Math.PI * 2);
+                        ctx.fill();
+
+                    } else if (expression === 'hurt') { // Hurt eyes ('X' marks)
+                        const crossSize = currentGridSize * 0.18; // Size of the X
+                        const eyeOffsetY = currentGridSize * 0.3; // Vertical position
+                        const eyeOffsetX = currentGridSize * 0.28; // Horizontal separation
+
+                        const eye1X = drawX + currentGridSize / 2 - eyeOffsetX;
+                        const eye1Y = drawY + eyeOffsetY;
+                        const eye2X = drawX + currentGridSize / 2 + eyeOffsetX;
+                        const eye2Y = drawY + eyeOffsetY;
+
+                        ctx.strokeStyle = '#A00000'; // Dark Red color for X
+                        ctx.lineWidth = Math.max(1.5, currentGridSize * 0.06); // Slightly thicker line
+
+                        // Draw X for eye 1
+                        ctx.beginPath();
+                        ctx.moveTo(eye1X - crossSize, eye1Y - crossSize);
+                        ctx.lineTo(eye1X + crossSize, eye1Y + crossSize);
+                        ctx.moveTo(eye1X + crossSize, eye1Y - crossSize);
+                        ctx.lineTo(eye1X - crossSize, eye1Y + crossSize);
+                        ctx.stroke();
+
+                        // Draw X for eye 2
+                        ctx.beginPath();
+                        ctx.moveTo(eye2X - crossSize, eye2Y - crossSize);
+                        ctx.lineTo(eye2X + crossSize, eye2Y + crossSize);
+                        ctx.moveTo(eye2X + crossSize, eye2Y - crossSize);
+                        ctx.lineTo(eye2X - crossSize, eye2Y + crossSize);
+                        ctx.stroke();
+
+                        ctx.lineWidth = 1; // Reset line width
+
+                    } else { // Normal Eyes
+                        const eyeRadius = currentGridSize * 0.12; // Slightly smaller normal eyes
+                        const eyeOffsetY = currentGridSize * 0.3;
+                        const eyeOffsetX = currentGridSize * 0.28;
+
+                        const eye1X = drawX + currentGridSize / 2 - eyeOffsetX;
+                        const eye1Y = drawY + eyeOffsetY;
+                        const eye2X = drawX + currentGridSize / 2 + eyeOffsetX;
+                        const eye2Y = drawY + eyeOffsetY;
+
+                        ctx.fillStyle = EYE_COLOR;
+                        ctx.beginPath();
+                        ctx.arc(eye1X, eye1Y, eyeRadius, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.beginPath();
+                        ctx.arc(eye2X, eye2Y, eyeRadius, 0, Math.PI * 2);
+                        ctx.fill();
                     }
                 } catch (eyeError) { handleError(eyeError, "drawSnakePart - Eyes"); }
             }
-            // Nostrils
+            // Nostrils (Simplified Centered Positioning)
             if (!isGameOver && currentStage.hasNostrils) {
                 try {
-                    ctx.fillStyle = NOSTRIL_COLOR; // Keep using global NOSTRIL_COLOR or define per stage? Using global for now.
-                    const nostrilSize = currentGridSize / 10;
-                    const nostrilOffset = currentGridSize / 5;
-                    let n1X, n1Y, n2X, n2Y;
-                    // Position logic... (same as before)
-                    if (dx === 1) { n1X = drawX + currentGridSize - nostrilOffset - nostrilSize; n2X = n1X; n1Y = drawY + nostrilOffset; n2Y = drawY + currentGridSize - nostrilOffset - nostrilSize; }
-                    else if (dx === -1) { n1X = drawX + nostrilOffset; n2X = n1X; n1Y = drawY + nostrilOffset; n2Y = drawY + currentGridSize - nostrilOffset - nostrilSize; }
-                    else if (dy === 1) { n1Y = drawY + currentGridSize - nostrilOffset - nostrilSize; n2Y = n1Y; n1X = drawX + nostrilOffset; n2X = drawX + currentGridSize - nostrilOffset - nostrilSize; }
-                    else { n1Y = drawY + nostrilOffset; n2Y = n1Y; n1X = drawX + nostrilOffset; n2X = drawX + currentGridSize - nostrilOffset - nostrilSize; }
-                    if (typeof n1X === 'number' && typeof n1Y === 'number' && typeof n2X === 'number' && typeof n2Y === 'number' && typeof nostrilSize === 'number' && nostrilSize > 0){ ctx.fillRect(n1X, n1Y, nostrilSize, nostrilSize); ctx.fillRect(n2X, n2Y, nostrilSize, nostrilSize); }
-                    else { console.warn("Invalid nostril coords/size."); }
+                    ctx.fillStyle = NOSTRIL_COLOR;
+                    const nostrilSize = currentGridSize * 0.08;
+                    const nostrilOffsetY = currentGridSize * 0.45; // Position below eyes
+                    const nostrilOffsetX = currentGridSize * 0.15; // Separation
+
+                    const n1X = drawX + currentGridSize / 2 - nostrilOffsetX;
+                    const n1Y = drawY + nostrilOffsetY;
+                    const n2X = drawX + currentGridSize / 2 + nostrilOffsetX;
+                    const n2Y = drawY + nostrilOffsetY;
+
+                    ctx.fillRect(n1X - nostrilSize / 2, n1Y - nostrilSize / 2, nostrilSize, nostrilSize);
+                    ctx.fillRect(n2X - nostrilSize / 2, n2Y - nostrilSize / 2, nostrilSize, nostrilSize);
+
                 } catch (nostrilError) { handleError(nostrilError, "drawSnakePart - Nostrils"); }
+            }
+
+            // Draw mouth based on expression (Centered)
+            if (!isGameOver && currentStage.hasEyes) {
+                try {
+                    let mouthX, mouthY, mouthWidth, mouthHeight;
+                    const mouthBaseY = drawY + currentGridSize * 0.7; // Base vertical position for mouth
+                    ctx.lineWidth = Math.max(1, currentGridSize * 0.08); // Scale line width
+
+                    if (expression === 'happy') {
+                        // Wider Smile
+                        mouthWidth = currentGridSize * 0.6;
+                        mouthHeight = currentGridSize * 0.2; // Curve height
+                        mouthX = drawX + (currentGridSize - mouthWidth) / 2;
+                        mouthY = mouthBaseY - mouthHeight * 0.5; // Adjust Y based on base
+                        ctx.beginPath();
+                        ctx.arc(mouthX + mouthWidth / 2, mouthY, mouthWidth / 2, 0, Math.PI);
+                        ctx.strokeStyle = 'black';
+                        ctx.stroke();
+                    }
+                    else if (expression === 'hurt') {
+                        // More pronounced Frown
+                        mouthWidth = currentGridSize * 0.5;
+                        mouthHeight = currentGridSize * 0.15;
+                        mouthX = drawX + (currentGridSize - mouthWidth) / 2;
+                        mouthY = mouthBaseY; // Position frown lower
+                        ctx.beginPath();
+                        // Draw arc upside down for frown
+                        ctx.arc(mouthX + mouthWidth / 2, mouthY, mouthWidth / 2, Math.PI, Math.PI * 2);
+                        ctx.strokeStyle = '#A00000'; // Darker red
+                        ctx.stroke();
+                    }
+                    // No mouth for normal expression
+                    ctx.lineWidth = 1; // Reset line width
+                } catch (mouthError) { handleError(mouthError, "drawSnakePart - Mouth"); }
             }
         }
     } catch (partError) { handleError(partError, `drawSnakePart index ${index}`); }
@@ -380,8 +610,145 @@ function showStagePopup(stageName) {
     }
 }
 
-function drawSnake() { if (!snake || snake.length === 0) { console.warn("DrawSnake call: Snake invalid."); return; } try { for (let i = snake.length - 1; i >= 0; i--) { drawSnakePart(snake[i], i, snake.length); } } catch(e) { handleError(e, "drawSnake loop"); } }
-function drawFood() { if (!ctx || !food) return; try { const pulseFactor=(Math.sin(Date.now()/config.FOOD_PULSE_SPEED*Math.PI*2)+1)/2; const scale=0.85+pulseFactor*0.15; const pulsatingSize=config.GRID_SIZE*scale; const offset=(config.GRID_SIZE-pulsatingSize)/2; const foodX=food.x*config.GRID_SIZE+offset; const foodY=food.y*config.GRID_SIZE+offset; ctx.shadowBlur=config.GRID_SIZE*0.8; ctx.shadowColor=config.FOOD_GLOW_COLOR; ctx.fillStyle=config.FOOD_COLOR; ctx.strokeStyle=config.FOOD_BORDER_COLOR; ctx.fillRect(foodX,foodY,pulsatingSize,pulsatingSize); ctx.strokeRect(foodX,foodY,pulsatingSize,pulsatingSize); ctx.shadowBlur=0; ctx.shadowColor='transparent'; } catch (e) { handleError(e, "drawFood"); } }
+let currentExpression = 'normal';
+
+function drawSnake() {
+    if (!snake || snake.length === 0) {
+        console.warn("DrawSnake call: Snake invalid.");
+        return;
+    }
+    try {
+        // Draw body with normal expression
+        for (let i = snake.length - 1; i > 0; i--) {
+            const fadeFactor = 0.2 + (0.8 * (i / snake.length)); // More opaque towards head
+            ctx.globalAlpha = fadeFactor;
+            drawSnakePart(snake[i], i, snake.length, 'normal');
+        }
+        // Draw head with current expression
+        if (snake.length > 0) {
+            ctx.globalAlpha = 1.0;
+            drawSnakePart(snake[0], 0, snake.length, currentExpression);
+        }
+        ctx.globalAlpha = 1.0; // Reset alpha
+    } catch(e) {
+        handleError(e, "drawSnake loop");
+    }
+}
+function drawFood() {
+    if (!ctx || !food) return;
+    try {
+        const pulseFactor = (Math.sin(Date.now() / config.FOOD_PULSE_SPEED * Math.PI * 2) + 1) / 2;
+        const baseScale = 0.85; // Base size before pulse
+        const scale = baseScale + pulseFactor * (1.0 - baseScale); // Pulse from baseScale to 1.0
+        const pulsatingSize = config.GRID_SIZE * scale;
+        const offset = (config.GRID_SIZE - pulsatingSize) / 2;
+        const foodDrawX = food.x * config.GRID_SIZE + offset; // Renamed to avoid conflict
+        const foodDrawY = food.y * config.GRID_SIZE + offset; // Renamed to avoid conflict
+        const centerX = food.x * config.GRID_SIZE + config.GRID_SIZE / 2; // Center for timer arc
+        const centerY = food.y * config.GRID_SIZE + config.GRID_SIZE / 2; // Center for timer arc
+
+        let foodColor = config.FOOD_COLOR;
+        let borderColor = config.FOOD_BORDER_COLOR;
+        let glowColor = config.FOOD_GLOW_COLOR;
+        let shape = 'square'; // Default shape
+        let specialType = null;
+
+        if (food.isSpecial && food.typeIndex !== null && config.specialFoodTypes[food.typeIndex]) {
+            specialType = config.specialFoodTypes[food.typeIndex];
+            foodColor = specialType.color;
+            borderColor = specialType.borderColor;
+            glowColor = specialType.glowColor;
+            shape = specialType.shape || 'square';
+            ctx.shadowBlur = config.GRID_SIZE * 1.1; // Slightly smaller glow for special
+        } else {
+            // Normal food glow
+            ctx.shadowBlur = config.GRID_SIZE * 0.8;
+        }
+        ctx.shadowColor = glowColor;
+        ctx.fillStyle = foodColor;
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 1.5; // Slightly thicker border
+
+        // --- Draw Shape ---
+        ctx.beginPath();
+        const halfSize = pulsatingSize / 2;
+        const drawCenterX = foodDrawX + halfSize;
+        const drawCenterY = foodDrawY + halfSize;
+
+        if (shape === 'diamond') {
+            ctx.moveTo(drawCenterX, foodDrawY); // Top point
+            ctx.lineTo(foodDrawX + pulsatingSize, drawCenterY); // Right point
+            ctx.lineTo(drawCenterX, foodDrawY + pulsatingSize); // Bottom point
+            ctx.lineTo(foodDrawX, drawCenterY); // Left point
+        } else if (shape === 'star') {
+            const spikes = 5;
+            const outerRadius = halfSize;
+            const innerRadius = halfSize * 0.5;
+            let rot = Math.PI / 2 * 3; // Start at top
+            let step = Math.PI / spikes;
+            ctx.moveTo(drawCenterX, drawCenterY - outerRadius);
+            for (let i = 0; i < spikes; i++) {
+                let x = drawCenterX + Math.cos(rot) * outerRadius;
+                let y = drawCenterY + Math.sin(rot) * outerRadius;
+                ctx.lineTo(x, y);
+                rot += step;
+                x = drawCenterX + Math.cos(rot) * innerRadius;
+                y = drawCenterY + Math.sin(rot) * innerRadius;
+                ctx.lineTo(x, y);
+                rot += step;
+            }
+            ctx.lineTo(drawCenterX, drawCenterY - outerRadius); // Close path
+        } else if (shape === 'triangle') {
+            const height = pulsatingSize * (Math.sqrt(3)/2); // Equilateral triangle height
+            ctx.moveTo(drawCenterX, foodDrawY + (pulsatingSize - height) / 2); // Top point
+            ctx.lineTo(foodDrawX + pulsatingSize, foodDrawY + (pulsatingSize - height) / 2 + height); // Bottom right
+            ctx.lineTo(foodDrawX, foodDrawY + (pulsatingSize - height) / 2 + height); // Bottom left
+        } else { // Default: square
+            // fillRect/strokeRect handle the square shape
+        }
+
+        if (shape !== 'square') {
+             ctx.closePath();
+             ctx.fill();
+             ctx.stroke();
+        } else {
+             ctx.fillRect(foodDrawX, foodDrawY, pulsatingSize, pulsatingSize);
+             ctx.strokeRect(foodDrawX, foodDrawY, pulsatingSize, pulsatingSize);
+        }
+        // --- End Draw Shape ---
+
+
+        // --- Draw Timer ---
+        if (food.isSpecial && food.durationMs > 0) {
+            const elapsedTime = Date.now() - food.spawnTime;
+            const remainingFraction = Math.max(0, 1 - (elapsedTime / food.durationMs));
+
+            if (remainingFraction > 0) {
+                ctx.fillStyle = config.SPECIAL_FOOD_TIMER_COLOR;
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)'; // Slight border for timer
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY); // Move to center for pie chart
+                // Arc parameters: x, y, radius, startAngle, endAngle, anticlockwise
+                const startAngle = -Math.PI / 2; // Start at the top
+                const endAngle = startAngle + (remainingFraction * Math.PI * 2);
+                const timerRadius = config.GRID_SIZE * 0.4; // Slightly smaller than food
+                ctx.arc(centerX, centerY, timerRadius, startAngle, endAngle, false);
+                ctx.lineTo(centerX, centerY); // Line back to center
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+            }
+        }
+        // --- End Draw Timer ---
+
+        ctx.shadowBlur = 0;
+        ctx.shadowColor = 'transparent';
+        ctx.lineWidth = 1; // Reset line width
+    } catch (e) {
+        handleError(e, "drawFood");
+    }
+}
 function drawBackgroundEffects() { if (!ctx) return; try { updateBackgroundParticles(); drawBackgroundParticles(ctx); } catch (e) { handleError(e, "drawBackgroundEffects"); } }
 function drawForegroundEffects() { if (!ctx) return; try { updateEatParticles(); drawEatParticles(ctx); } catch (e) { handleError(e, "drawForegroundEffects"); } }
 function applyScreenShake() {
@@ -419,6 +786,13 @@ function moveSnake() {
                 if (scoreElement) scoreElement.textContent = score;
                 shakeDuration = config.SHAKE_DURATION_FRAMES;
                 currentShakeIntensity = config.SHAKE_BASE_INTENSITY;
+                // Set hurt expression for 0.5 seconds
+                currentExpression = 'hurt';
+                setTimeout(() => {
+                    if (currentExpression === 'hurt') {
+                        currentExpression = 'normal';
+                    }
+                }, 500);
 
                 // --- Check for Stage Regression ---
                 const currentMinLength = config.stages[currentStageIndex].minLength;
@@ -446,7 +820,31 @@ function moveSnake() {
             // Power-up collision
             playPowerupSound();
             activateMultiplier();
-            spawnEatParticles(powerUp.x * config.GRID_SIZE + config.GRID_SIZE / 2, powerUp.y * config.GRID_SIZE + config.GRID_SIZE / 2, config.POWERUP_COLOR);
+            
+            // Enhanced power-up particles
+            const centerX = powerUp.x * config.GRID_SIZE + config.GRID_SIZE / 2;
+            const centerY = powerUp.y * config.GRID_SIZE + config.GRID_SIZE / 2;
+            
+            // Main burst
+            spawnEatParticles(centerX, centerY, config.POWERUP_COLOR);
+            
+            // Additional sparkle effect
+            for (let i = 0; i < 15; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 4 + 2;
+                const life = Math.random() * 60 + 40;
+                const size = Math.random() * 2 + 1;
+                const whiteSpark = `rgba(255, 255, 255, ${Math.random() * 0.8 + 0.2})`;
+                
+                eatParticles.push(new Particle(
+                    centerX, centerY,
+                    Math.cos(angle) * speed,
+                    Math.sin(angle) * speed,
+                    life,
+                    whiteSpark,
+                    size
+                ));
+            }
             powerUp = null;
         } else if (food && newHead.x === food.x && newHead.y === food.y) {
             // Food collision
@@ -458,14 +856,119 @@ function moveSnake() {
                 highScore = score;
                 localStorage.setItem('snakeHighScore', highScore);
                 if (highScoreElement) highScoreElement.textContent = highScore;
+
+                if (!highScoreBrokenThisGame) {
+                    highScoreBrokenThisGame = true; // Set flag
+                    console.log("New High Score achieved this game!");
+
+                    // In-game celebration (particles + sound + popup)
+                    spawnEatParticles(
+                        snake[0].x * config.GRID_SIZE + config.GRID_SIZE/2,
+                        snake[0].y * config.GRID_SIZE + config.GRID_SIZE/2,
+                        '#FFD700' // Gold color for celebration
+                    );
+                    playSound(powerupSound); // Use powerup sound for now
+                    if (stagePopupElement) {
+                        // stagePopupElement.textContent = 'NEW HIGH SCORE!'; // Set by showStagePopup
+                        stagePopupElement.style.color = '#FFD700'; // Gold color
+                        stagePopupElement.style.textShadow = '0 0 10px #FFD700'; // Gold glow
+                        showStagePopup('NEW HIGH SCORE!'); // Use the popup function
+                    }
+                }
             }
             playSound(eatSound, "Eat");
-            spawnEatParticles(food.x * config.GRID_SIZE + config.GRID_SIZE / 2, food.y * config.GRID_SIZE + config.GRID_SIZE / 2, config.FOOD_COLOR);
-            placeFood();
-            maybeSpawnPowerup();
-            gameSpeed = Math.max(config.MIN_GAME_SPEED, gameSpeed - config.SPEED_INCREMENT);
 
-            // --- Check for Stage Up ---
+            let effectApplied = false; // Flag to prevent normal speed increase if special food was eaten
+
+            // --- Apply Food Effect ---
+            if (food.isSpecial && food.typeIndex !== null && config.specialFoodTypes[food.typeIndex]) {
+                const specialType = config.specialFoodTypes[food.typeIndex];
+                const effect = specialType.effect;
+                let popupMessage = specialType.name.toUpperCase() + '!'; // Default popup message
+
+                console.log(`Applying effect: ${specialType.name}`);
+                effectApplied = true; // Mark that a special effect happened
+
+                // Apply effect based on type
+                if (effect.type === 'speed') {
+                    gameSpeed += effect.value; // Note: Positive value slows down (increases delay)
+                    popupMessage = effect.value > 0 ? 'SLOW DOWN!' : 'SPEED UP!';
+                    updateSpeedDisplay();
+                } else if (effect.type === 'score') {
+                    score += effect.value;
+                    if (scoreElement) scoreElement.textContent = score;
+                    animateScore(); // Animate the score update
+                    popupMessage = `+${effect.value} POINTS!`;
+                } else if (effect.type === 'shrink') {
+                    const segmentsToRemove = Math.min(effect.value, snake.length - config.MIN_SNAKE_LENGTH);
+                    if (segmentsToRemove > 0) {
+                        for (let i = 0; i < segmentsToRemove; i++) {
+                            if (snake.length > config.MIN_SNAKE_LENGTH) {
+                                snake.pop();
+                            } else {
+                                break; // Stop if min length reached
+                            }
+                        }
+                        popupMessage = 'SHRUNK!';
+                        // Check for stage regression after shrinking
+                        const currentMinLength = config.stages[currentStageIndex].minLength;
+                        if (currentStageIndex > 0 && snake.length < currentMinLength) {
+                            for (let i = currentStageIndex - 1; i >= 0; i--) {
+                                if (snake.length >= config.stages[i].minLength) {
+                                    console.log(`Stage Down! New stage: ${config.stages[i].name} (Index: ${i}) due to shrink`);
+                                    currentStageIndex = i;
+                                    break;
+                                }
+                            }
+                        }
+                    } else {
+                         popupMessage = 'TOO SHORT TO SHRINK!'; // Or no popup?
+                    }
+                }
+                // Add other effect types here...
+
+                // Spawn particles with special color
+                spawnEatParticles(
+                    food.x * config.GRID_SIZE + config.GRID_SIZE / 2,
+                    food.y * config.GRID_SIZE + config.GRID_SIZE / 2,
+                    specialType.color
+                );
+
+                // Show effect popup
+                if (stagePopupElement) {
+                    stagePopupElement.style.color = specialType.color; // Use food color for popup
+                    stagePopupElement.style.textShadow = `0 0 8px ${specialType.glowColor || specialType.color}`; // Add glow
+                    showStagePopup(popupMessage);
+                }
+
+            } else {
+                // Normal food: Spawn normal particles
+                spawnEatParticles(
+                    food.x * config.GRID_SIZE + config.GRID_SIZE / 2,
+                    food.y * config.GRID_SIZE + config.GRID_SIZE / 2,
+                    config.FOOD_COLOR
+                );
+            }
+            // --- End Apply Food Effect ---
+
+            // Set happy expression regardless of food type
+            currentExpression = 'happy';
+            setTimeout(() => {
+                if (currentExpression === 'happy') {
+                    currentExpression = 'normal';
+                }
+            }, 500);
+
+            placeFood(); // Place new food
+            maybeSpawnPowerup(); // Chance to spawn powerup
+
+            // Only increase speed (decrease delay) for NORMAL food
+            if (!effectApplied) {
+                gameSpeed = Math.max(config.MIN_GAME_SPEED, gameSpeed - config.SPEED_INCREMENT);
+                updateSpeedDisplay();
+            }
+
+            // --- Check for Stage Up (applies after eating any food) ---
             const nextStageIndex = currentStageIndex + 1;
             if (nextStageIndex < config.stages.length && snake.length >= config.stages[nextStageIndex].minLength) {
                 currentStageIndex = nextStageIndex;
@@ -484,7 +987,75 @@ function moveSnake() {
         if (!isGameOver && snake.length < config.MIN_SNAKE_LENGTH) { handleGameOver(); }
     } catch (moveError) { handleError(moveError, "moveSnake"); }
 }
-function placeFood() { let newPos, attempts = 0; const maxAttempts = GRID_WIDTH * GRID_HEIGHT * 3; console.log("Attempting to place food..."); food = null; try { do { newPos = { x: Math.floor(Math.random() * GRID_WIDTH), y: Math.floor(Math.random() * GRID_HEIGHT) }; attempts++; if (attempts > maxAttempts) { console.error(`CRITICAL: Could not place food after ${maxAttempts} attempts.`); return; } } while (isPositionOccupied(newPos, true, config.ENABLE_OBSTACLES, true)); food = newPos; console.log(`Placed food at: (${food.x}, ${food.y}) after ${attempts} attempts.`); } catch(e) { handleError(e, "placeFood"); food = null; } }
+function placeFood() {
+    let newFoodData = {}, attempts = 0;
+    const maxAttempts = GRID_WIDTH * GRID_HEIGHT * 3;
+    console.log("Attempting to place food...");
+    food = null; // Clear existing food first
+
+    try {
+        // --- Determine Food Type ---
+        let isSpecial = Math.random() < config.SPECIAL_FOOD_SPAWN_CHANCE;
+        let typeIndex = null;
+        let durationMs = 0;
+        let foodTypeName = "Normal";
+
+        if (isSpecial && config.specialFoodTypes && config.specialFoodTypes.length > 0) {
+            // Weighted random selection for special food type
+            const totalWeight = config.specialFoodTypes.reduce((sum, type) => sum + (type.spawnWeight || 1), 0);
+            let randomWeight = Math.random() * totalWeight;
+            for (let i = 0; i < config.specialFoodTypes.length; i++) {
+                randomWeight -= (config.specialFoodTypes[i].spawnWeight || 1);
+                if (randomWeight <= 0) {
+                    typeIndex = i;
+                    durationMs = config.specialFoodTypes[i].durationMs || 0;
+                    foodTypeName = config.specialFoodTypes[i].name;
+                    break;
+                }
+            }
+            // Fallback if something went wrong with weights
+            if (typeIndex === null) {
+                 console.warn("Special food type selection failed, defaulting to normal food.");
+                 isSpecial = false;
+            }
+        } else {
+            isSpecial = false; // Ensure it's false if no special types or chance failed
+        }
+        // --- End Determine Food Type ---
+
+        // --- Find Valid Position ---
+        let newPos;
+        do {
+            newPos = {
+                x: Math.floor(Math.random() * GRID_WIDTH),
+                y: Math.floor(Math.random() * GRID_HEIGHT)
+            };
+            attempts++;
+            if (attempts > maxAttempts) {
+                console.error(`CRITICAL: Could not place food after ${maxAttempts} attempts.`);
+                return; // Exit if no valid spot found
+            }
+        } while (isPositionOccupied(newPos, true, config.ENABLE_OBSTACLES, true));
+        // --- End Find Valid Position ---
+
+        // --- Assign Food Object ---
+        food = {
+            x: newPos.x,
+            y: newPos.y,
+            isSpecial: isSpecial,
+            typeIndex: typeIndex, // Index in config.specialFoodTypes or null
+            spawnTime: isSpecial ? Date.now() : 0,
+            durationMs: durationMs
+        };
+        // --- End Assign Food Object ---
+
+        console.log(`Placed ${isSpecial ? foodTypeName : 'Normal'} food at: (${food.x}, ${food.y}) after ${attempts} attempts.`);
+
+    } catch(e) {
+        handleError(e, "placeFood");
+        food = null; // Ensure food is null on error
+    }
+}
 function isFoodOnSnake(position) { if (!snake || !position) return false; return snake.some(segment => segment && segment.x === position.x && segment.y === position.y); }
 function handleGameOver() {
     console.log("GAME OVER triggered.");
@@ -531,7 +1102,19 @@ function handleGameOver() {
         } else { console.error("Cannot perform final draw - ctx missing."); }
 
         if (gameOverElement && finalScoreValueElement) {
-            finalScoreValueElement.textContent = score;
+            let gameOverText = `Score: ${score}`;
+            if (highScoreBrokenThisGame) {
+                gameOverText += "<br>🎉 New High Score! 🎉";
+                // TODO: Add fireworks particle effect here later?
+            }
+            // finalScoreValueElement.textContent = score; // Keep this if needed elsewhere, but update the main display
+            const finalScoreDisplay = gameOverElement.querySelector('.final-score');
+            if (finalScoreDisplay) {
+                 finalScoreDisplay.innerHTML = gameOverText; // Update the score display part
+            } else {
+                 // Fallback if .final-score isn't found (though it should be based on HTML)
+                 finalScoreValueElement.textContent = score + (highScoreBrokenThisGame ? " (New High Score!)" : "");
+            }
             gameOverElement.style.display = 'block';
             gameOverElement.style.animation = 'none';
             void gameOverElement.offsetWidth; // Trigger reflow
@@ -599,6 +1182,8 @@ function applyConfiguration() {
             const speedRatio = (speedInputValue - MIN_SPEED_INPUT) / (MAX_SPEED_INPUT - MIN_SPEED_INPUT);
             config.INITIAL_GAME_SPEED = Math.round(MAX_GAME_DELAY - speedRatio * (MAX_GAME_DELAY - config.MIN_GAME_SPEED));
             console.log(`Speed Input: ${speedInputValue}, Calculated Initial Delay: ${config.INITIAL_GAME_SPEED}`);
+            // Note: We don't call updateSpeedDisplay() here because applyConfiguration forces a restart via initializeGame(),
+            // which already calls updateSpeedDisplay() with the correct initial gameSpeed.
         } else {
             console.warn(`Invalid speed input value: ${configSpeedInput.value}. Using previous initial speed: ${config.INITIAL_GAME_SPEED}`);
         }
@@ -646,7 +1231,15 @@ function gameLoop() {
             clearCanvas();
             drawBackgroundEffects();
             if (config.ENABLE_OBSTACLES) drawObstacles();
-            if (food) drawFood(); else { console.warn("Loop: Food missing."); placeFood(); if(food) drawFood(); else { handleError(new Error("Food missing & cannot be placed."), "gameLoop - Food Check"); /* REMOVED: ctx.restore(); */ return; } } // Place or fail
+
+            // --- Check for expired special food ---
+            if (food && food.isSpecial && food.durationMs > 0 && (Date.now() - food.spawnTime > food.durationMs)) {
+                console.log(`Special food (${config.specialFoodTypes[food.typeIndex]?.name || 'Unknown'}) expired. Replacing.`);
+                placeFood(); // Replace expired food
+            }
+            // --- End check ---
+
+            if (food) drawFood(); else { console.warn("Loop: Food missing."); placeFood(); if(food) drawFood(); else { handleError(new Error("Food missing & cannot be placed."), "gameLoop - Food Check"); return; } } // Place or fail
             if (powerUp) drawPowerup();
 
             moveSnake();

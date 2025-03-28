@@ -69,6 +69,9 @@ h1 { font-family: 'Press Start 2P', cursive; font-size: 1.4em; color: var(--text
 .multiplier-active { background-color: var(--powerup-color); color: #333; font-weight: bold; animation: pulseMultiplier 1s infinite ease-in-out; }
 @keyframes pulseMultiplier { 0%, 100% { transform: scale(1); box-shadow: 0 0 3px var(--powerup-color); } 50% { transform: scale(1.15); box-shadow: 0 0 8px var(--powerup-color); } }
 
+/* Speed Display Style */
+#speedDisplay { font-weight: bold; color: #4682B4; /* Steel Blue */ }
+
 /* Score Pop Animation */
 @keyframes scorePop { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.4); opacity: 0.9; color: var(--btn-success); } 100% { transform: scale(1); opacity: 1; } }
 .score-pop-animation { display: inline-block; animation: scorePop 0.4s ease-out; }
@@ -168,7 +171,11 @@ input[type=range]:hover::-moz-range-thumb { background: var(--bg-gradient-start)
 .config-group input[type="color"]::-moz-color-swatch { border: 1px solid #ccc; border-radius: 4px; }
 
 /* Styles for the Toggle Switch */
-.toggle-group { /* Adjust spacing if needed */ }
+.toggle.toggle-group {
+    margin-top: 10px; /* Example spacing */
+    display: flex;    /* Example layout */
+    justify-content: center;
+}
 .switch { position: relative; display: inline-block; width: 50px; height: 26px; }
 .switch input { opacity: 0; width: 0; height: 0; }
 .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--toggle-bg-off); transition: .4s; }
