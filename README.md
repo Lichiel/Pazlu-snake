@@ -67,8 +67,6 @@ The game ends if the snake collides with itself, an obstacle, or shrinks to zero
 
 ## Live Demo
 
-**(Remember to Replace This Link!)**
-
 You can play the game live here:
 
 **[Play Pazlu Snake!](https://github.com/Lichiel/Pazlu-snake/)**
